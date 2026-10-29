@@ -1,0 +1,13 @@
+html {
+  min-height: 100%;
+  color-scheme: dark;
+}
+
+body {
+  min-width: 320px;
+}
+
+::selection {
+  background: var(--mantine-color-teal-4);
+  color: #042f2e;
+}
