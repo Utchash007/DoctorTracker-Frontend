@@ -1,11 +1,16 @@
 import { Badge, Card, Center, EmptyState, Stack } from "@mantine/core";
 import { IconChartBar } from "@tabler/icons-react";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { PageLoading } from "@/components/shared/page-loading";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-export default function DashboardPage() {
+async function DashboardContent() {
+  await requireAdmin();
+
   return (
     <Stack gap="xl">
       <PageHeader
@@ -27,5 +32,13 @@ export default function DashboardPage() {
         </Center>
       </Card>
     </Stack>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <DashboardContent />
+    </Suspense>
   );
 }

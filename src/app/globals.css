@@ -1,6 +1,29 @@
 html {
   min-height: 100%;
+}
+
+html[data-mantine-color-scheme="light"] {
+  color-scheme: light;
+}
+
+html[data-mantine-color-scheme="dark"] {
   color-scheme: dark;
+}
+
+:root {
+  --clerk-color-primary: var(--mantine-primary-color-filled);
+  --clerk-color-primary-foreground: var(--app-teal-contrast);
+  --clerk-color-background: var(--app-surface-color);
+  --clerk-color-foreground: var(--mantine-color-text);
+  --clerk-color-muted: var(--mantine-color-default-hover);
+  --clerk-color-muted-foreground: var(--mantine-color-dimmed);
+  --clerk-color-input: var(--mantine-color-body);
+  --clerk-color-input-foreground: var(--mantine-color-text);
+  --clerk-color-border: var(--mantine-color-default-border);
+  --clerk-color-ring: var(--mantine-primary-color-filled);
+  --clerk-font-family: var(--mantine-font-family);
+  --clerk-font-family-buttons: var(--mantine-font-family);
+  --clerk-border-radius: var(--mantine-radius-md);
 }
 
 body {
@@ -8,6 +31,6 @@ body {
 }
 
 ::selection {
-  background: var(--mantine-color-teal-4);
-  color: #042f2e;
+  background: var(--mantine-primary-color-filled);
+  color: var(--app-teal-contrast);
 }

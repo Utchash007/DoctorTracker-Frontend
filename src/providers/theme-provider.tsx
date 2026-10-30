@@ -9,8 +9,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     <MantineProvider
       theme={theme}
       cssVariablesResolver={cssVariablesResolver}
-      defaultColorScheme="dark"
-      forceColorScheme="dark"
+      defaultColorScheme="auto"
     >
       {children}
     </MantineProvider>

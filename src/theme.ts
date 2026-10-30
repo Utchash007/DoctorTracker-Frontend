@@ -26,6 +26,18 @@ export const theme = createTheme({
     },
   },
   colors: {
+    gray: [
+      "#F8FAFC",
+      "#F1F5F9",
+      "#E2E8F0",
+      "#CBD5E1",
+      "#94A3B8",
+      "#64748B",
+      "#475569",
+      "#334155",
+      "#1E293B",
+      "#0F172A",
+    ],
     dark: [
       "#F8FAFC",
       "#E2E8F0",
@@ -61,9 +73,10 @@ export const theme = createTheme({
     if (
       input.variant === "filled" &&
       color.color === "teal" &&
-      (color.shade ?? 4) <= 5
+      (color.shade === undefined || color.shade <= 5)
     ) {
-      return { ...resolved, color: "#042F2E", hoverColor: "#042F2E" };
+      const contrast = color.shade === undefined ? "var(--app-teal-contrast)" : "#042F2E";
+      return { ...resolved, color: contrast, hoverColor: contrast };
     }
 
     return resolved;
@@ -71,14 +84,14 @@ export const theme = createTheme({
   components: {
     AppShell: AppShell.extend({
       styles: {
-        header: { backgroundColor: "var(--mantine-color-dark-6)" },
-        navbar: { backgroundColor: "var(--mantine-color-dark-6)" },
+        header: { backgroundColor: "var(--app-surface-color)" },
+        navbar: { backgroundColor: "var(--app-surface-color)" },
       },
     }),
     Card: Card.extend({
       defaultProps: { withBorder: true, padding: "xl", radius: "lg" },
       styles: {
-        root: { backgroundColor: "var(--mantine-color-dark-6)" },
+        root: { backgroundColor: "var(--app-surface-color)" },
       },
     }),
     NavLink: NavLink.extend({
@@ -93,8 +106,22 @@ export const theme = createTheme({
 
 export const cssVariablesResolver: CSSVariablesResolver = (mantineTheme) => ({
   variables: {},
-  light: {},
+  light: {
+    "--app-surface-color": mantineTheme.white,
+    "--app-teal-contrast": mantineTheme.white,
+    "--mantine-color-body": mantineTheme.colors.gray[0],
+    "--mantine-color-text": mantineTheme.colors.gray[9],
+    "--mantine-color-dimmed": mantineTheme.colors.gray[6],
+    "--mantine-color-default": mantineTheme.white,
+    "--mantine-color-default-hover": mantineTheme.colors.gray[0],
+    "--mantine-color-default-border": mantineTheme.colors.gray[2],
+    "--mantine-color-teal-light": alpha(mantineTheme.colors.teal[7], 0.08),
+    "--mantine-color-teal-light-hover": alpha(mantineTheme.colors.teal[7], 0.12),
+    "--mantine-color-teal-light-color": mantineTheme.colors.teal[7],
+  },
   dark: {
+    "--app-surface-color": mantineTheme.colors.dark[6],
+    "--app-teal-contrast": "#042F2E",
     "--mantine-color-body": mantineTheme.colors.dark[7],
     "--mantine-color-text": mantineTheme.colors.dark[0],
     "--mantine-color-dimmed": mantineTheme.colors.dark[2],
