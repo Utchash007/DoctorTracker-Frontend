@@ -112,8 +112,9 @@ export function normalizeLimit(input: string | undefined): number {
 
 /** Dashboard `range`: only 7d/30d/90d; anything else is the 30d default. */
 export function normalizeDashboardRange(input: string | undefined): DashboardRange {
-  if (input && (DASHBOARD_RANGES as readonly string[]).includes(input)) {
-    return input as DashboardRange;
+  const value = input?.trim();
+  if (value && (DASHBOARD_RANGES as readonly string[]).includes(value)) {
+    return value as DashboardRange;
   }
   return "30d";
 }

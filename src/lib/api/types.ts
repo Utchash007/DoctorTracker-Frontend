@@ -118,4 +118,6 @@ export type ReadFailure = {
   code: string;
   message: string;
   retryAfterSeconds?: number;
+  /** Absolute deadline set by a loader when receiving a rate-limit response. */
+  retryAt?: number;
 };

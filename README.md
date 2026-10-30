@@ -4,7 +4,9 @@ Doctor Tracker brings doctor profiles, patient records, and care activity into o
 
 ## Current phase
 
-**F3 — API layer and Server Action infrastructure.** Every API call runs in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs with typed failure mapping into safe `ActionResult` results. Pure URL-query normalization (`src/lib/api/params.ts`) turns list state into canonical API parameters; not-found and unexpected-render fallbacks plus retry-refresh callouts are in place. Data features land in F4–F7, starting with the dashboard.
+**F4 — Dashboard.** The protected dashboard streams four workspace totals, a top-ten patients-per-doctor bar chart, and a daily doctor/patient registration area chart. Its 7/30/90-day control changes the timeline through shareable URL state; totals and rankings retain their all-time/current-week meanings. Panels have independent skeletons, empty states and safe API-failure feedback, including session recovery and rate-limit-aware manual retry. Doctor and patient management follow in F5–F7.
+
+Every API call stays in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs. `src/lib/api/dashboard.ts` handles panel read failures without swallowing framework redirects or unexpected bugs. Charts receive only the fields they render.
 
 ## Setup
 
@@ -28,7 +30,7 @@ Open [http://localhost:3000](http://localhost:3000). Fill in your local `.env` u
 | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 
-`src/lib/env.ts` validates required configuration without logging values. Loopback HTTP is allowed for local production-mode smoke tests. F2 previews do not need a running API.
+`src/lib/env.ts` validates required configuration without logging values. Loopback HTTP is allowed for local production-mode smoke tests. The dashboard needs the backend running on port 5000 and a configured Clerk administrator.
 
 ### Clerk application
 
@@ -61,7 +63,7 @@ The font is self-hosted by `next/font`; the initial development compilation and 
 | `npm run build` | Production build |
 | `npm start` | Serve the production build on port 3000 |
 
-All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine **9.7.4**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, Zod **4.6.7**, Vitest **5.0.5**, and TypeScript **5.9.3**.
+All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine (including charts) **9.7.4**, Recharts **3.10.1**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, Zod **4.6.7**, Vitest **5.0.5**, and TypeScript **5.9.3**.
 
 Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` usage. Development and production builds use default Turbopack; ESLint uses Next's native flat config. Cache Components is not enabled. `src/proxy.ts` uses bare `clerkMiddleware()`; each protected page independently checks the session and admin role before rendering data.
 
@@ -77,6 +79,8 @@ src/
     auth/               # Mantine auth-page shell and skeletons
     layout/             # Mantine AppShell, header, and navigation compositions
     shared/             # Page headings, loading/theme controls, error callouts, manual retry
+    dashboard/          # Independently streamed summary, ranking and timeline panels
+    charts/             # Mantine charts and the URL-driven timeline range control
   lib/                  # Server-only env, auth/role helpers, and lib/api/ server client
   providers/            # Mantine theme and identity-scoped Zustand providers
   stores/               # Typed vanilla Zustand store factories
@@ -103,5 +107,14 @@ Shared transient UI belongs to Zustand; committed list filters belong to URL par
 6. On the admin shell, activate the keyboard skip link to reach the main content. Run lint, typecheck and build, then repeat smoke checks with `npm start`; check for hydration errors and horizontal overflow.
 
 F1 verification passed on Node **26.13.0**: clean install, dependency checks, lint, typecheck, production build, and desktop/mobile browser smoke checks in development and production.
+
+## F4 dashboard smoke test
+
+1. Start the backend and verify `GET http://localhost:5000/api/health`, then run this client with `npm run dev` and sign in as a Clerk admin.
+2. Open `/dashboard`. Check total doctors/patients, new registrations since Monday 00:00 UTC, the top-ten patient ranking, and the last 30 days of daily activity. The date-range control affects only the daily chart.
+3. Select 7 and 90 days, then use browser back/forward. Both selection and chart should match the URL. Selecting 30 days restores `/dashboard`; invalid or repeated range parameters normalize to a canonical URL.
+4. Check light/dark modes at desktop and 320/390 px mobile widths. Verify chart tooltips (full doctor names), keyboard range selection, and mobile navigation. Empty rankings and all-zero timelines should show explanatory library empty states.
+5. For a local read-failure check, stop the local API and change the range. Expect safe panel feedback; restart the API and choose **Retry**. Rate-limited responses disable retry until their deadline. A still-active Clerk session rejected by the API offers retry/sign-out; expired sessions return to sign-in.
+6. Repeat the auth checks above with your admin and non-admin accounts, and run the dashboard smoke in production mode with `npm run build` followed by `npm start`.
 
 The complete feature walkthrough, technical-decision deep dives, deployment details, and desktop/mobile screenshots are delivered in F8.
