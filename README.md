@@ -4,7 +4,7 @@ Doctor Tracker brings doctor profiles, patient records, and care activity into o
 
 ## Current phase
 
-**F2 — Clerk authentication and day/night modes.** `/` redirects to `/dashboard`; Dashboard, Doctors, and Patients are admin-protected preview pages with loading skeletons. The public `/sign-in` route uses Clerk's prebuilt sign-in flow, and signed-in non-admins reach `/forbidden`. The server-only API layer arrives in F3 and data features in F4–F7.
+**F3 — API layer and Server Action infrastructure.** Every API call runs in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs with typed failure mapping into safe `ActionResult` results. Pure URL-query normalization (`src/lib/api/params.ts`) turns list state into canonical API parameters; not-found and unexpected-render fallbacks plus retry-refresh callouts are in place. Data features land in F4–F7, starting with the dashboard.
 
 ## Setup
 
@@ -57,10 +57,11 @@ The font is self-hosted by `next/font`; the initial development compilation and 
 | `npm run dev` | Development server on port 3000 |
 | `npm run lint` | ESLint checks |
 | `npm run typecheck` | Generate Next route types and run strict TypeScript checks |
+| `npm run test:unit` | Vitest unit/contract tests with mocked Clerk auth and API transport |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build on port 3000 |
 
-All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine **9.7.4**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, and TypeScript **5.9.3**.
+All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine **9.7.4**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, Zod **4.6.7**, Vitest **5.0.5**, and TypeScript **5.9.3**.
 
 Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` usage. Development and production builds use default Turbopack; ESLint uses Next's native flat config. Cache Components is not enabled. `src/proxy.ts` uses bare `clerkMiddleware()`; each protected page independently checks the session and admin role before rendering data.
 
@@ -75,18 +76,20 @@ src/
   components/
     auth/               # Mantine auth-page shell and skeletons
     layout/             # Mantine AppShell, header, and navigation compositions
-    shared/             # Page headings, loading and theme controls
-  lib/                  # Server-only environment and auth/role helpers
+    shared/             # Page headings, loading/theme controls, error callouts, manual retry
+  lib/                  # Server-only env, auth/role helpers, and lib/api/ server client
   providers/            # Mantine theme and identity-scoped Zustand providers
   stores/               # Typed vanilla Zustand store factories
   types/                # Clerk custom session-claim declarations
   theme.ts              # Light/dark slate + teal tokens and component defaults
   proxy.ts              # Clerk session middleware and route matcher
+
+tests/                  # Vitest unit/contract suites (mocked Clerk auth + API transport)
 ```
 
 The admin layout creates one Zustand store per mounted provider scope. The Burger, AppShell, and navigation subscribe only to the fields/actions they use. The store starts closed on both server and client, closes on link navigation or Escape, and is recreated on a full page load or Clerk identity/session change. Collapsed mobile navigation is also hidden from keyboard focus through Mantine's Styles API.
 
-Shared transient UI belongs to Zustand; committed list filters belong to URL parameters; form values belong to Mantine Form. Clerk owns authentication and Mantine owns the saved theme preference. API access will run in Server Components and Server Actions, forwarding a fresh Clerk session token to Express.
+Shared transient UI belongs to Zustand; committed list filters belong to URL parameters; form values belong to Mantine Form. Clerk owns authentication and Mantine owns the saved theme preference. API access runs in server runtime only (`src/lib/api/client.ts`), forwarding a fresh Clerk session token to Express — the browser never calls the API.
 
 `requireAdmin()` protects read drivers. Future actions must independently call `authorizeAdminAction()` before API work: signed-out access redirects to sign-in; signed-in non-admin access returns a safe `{ ok: false, status: 403, code: "FORBIDDEN", message }` result. The `/forbidden` page calls only `requireSession()` so denied users can sign out without an authorization loop. Tokens and full auth objects stay in server runtime.
 
