@@ -64,6 +64,7 @@ describe("normalizeDashboardRange", () => {
   it("accepts only 7d/30d/90d and defaults invalid values to 30d", () => {
     expect(normalizeDashboardRange("7d")).toBe("7d");
     expect(normalizeDashboardRange("90d")).toBe("90d");
+    expect(normalizeDashboardRange(" 7d ")).toBe("7d");
     expect(normalizeDashboardRange("bogus")).toBe("30d");
     expect(normalizeDashboardRange(undefined)).toBe("30d");
   });

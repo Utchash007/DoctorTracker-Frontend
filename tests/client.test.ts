@@ -22,6 +22,7 @@ import {
   getDoctor,
   listDoctors,
   getPatientsPerDoctor,
+  getTimeline,
   apiSend,
 } from "@/lib/api/client";
 
@@ -261,6 +262,32 @@ describe("api client dashboard arrays and writes", () => {
     const [url] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
     expect(url.toString()).toBe(
       "http://api.test/api/dashboard/patients-per-doctor?limit=10",
+    );
+  });
+
+  it("keeps all four summary counters, including a completely empty workspace", async () => {
+    const data = {
+      totalDoctors: 0,
+      totalPatients: 0,
+      newDoctorsThisWeek: 0,
+      newPatientsThisWeek: 0,
+    };
+    fetchMock.mockResolvedValue(httpResponse({ body: JSON.stringify({ data }) }));
+
+    await expect(getDashboardSummary()).resolves.toEqual({ data });
+    expect(String(fetchMock.mock.calls[0][0])).toBe("http://api.test/api/dashboard/summary");
+  });
+
+  it.each(["7d", "30d", "90d"])("forwards the %s timeline range and preserves zero days", async (range) => {
+    const data = [
+      { date: "2026-10-29", doctors: 0, patients: 0 },
+      { date: "2026-10-30", doctors: 2, patients: 5 },
+    ];
+    fetchMock.mockResolvedValue(httpResponse({ body: JSON.stringify({ data }) }));
+
+    await expect(getTimeline({ range })).resolves.toEqual({ data });
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      `http://api.test/api/dashboard/timeline?range=${range}`,
     );
   });
 
