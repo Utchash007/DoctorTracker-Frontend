@@ -1,13 +1,16 @@
-import { Avatar, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconStethoscope, IconUser } from "@tabler/icons-react";
+import { UserButton } from "@clerk/nextjs";
+import { Group, Skeleton, Stack, Text, ThemeIcon } from "@mantine/core";
+import { IconStethoscope } from "@tabler/icons-react";
+import { Suspense } from "react";
 import { MobileNavigationToggle } from "@/components/layout/mobile-navigation-toggle";
+import { ColorSchemeToggle } from "@/components/shared/color-scheme-toggle";
 
 export function AppHeader() {
   return (
     <Group h="100%" px={{ base: "md", sm: "xl" }} justify="space-between" wrap="nowrap">
       <Group gap="sm" wrap="nowrap">
         <MobileNavigationToggle />
-        <ThemeIcon size={38} radius="md" variant="light">
+        <ThemeIcon size={38} radius="md" variant="light" visibleFrom="xs">
           <IconStethoscope size={24} stroke={1.7} aria-hidden="true" />
         </ThemeIcon>
         <Stack gap={0}>
@@ -20,13 +23,14 @@ export function AppHeader() {
         </Stack>
       </Group>
 
-      <Group gap="sm" wrap="nowrap" role="group" aria-label="Account placeholder">
+      <Group gap="xs" wrap="nowrap" role="group" aria-label="Appearance and account">
         <Text size="sm" c="dimmed" visibleFrom="sm">
-          Workspace preview
+          Admin workspace
         </Text>
-        <Avatar color="gray" radius="xl" size={36}>
-          <IconUser size={19} stroke={1.7} aria-hidden="true" />
-        </Avatar>
+        <ColorSchemeToggle />
+        <Suspense fallback={<Skeleton circle h={36} w={36} />}>
+          <UserButton />
+        </Suspense>
       </Group>
     </Group>
   );

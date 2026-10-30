@@ -5,16 +5,20 @@ import {
   AppShellNavbar,
   Container,
 } from "@mantine/core";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AdminShell } from "@/components/layout/admin-shell";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { UiStoreProvider } from "@/providers/ui-store-provider";
+import { PageLoading } from "@/components/shared/page-loading";
+import { requireAdmin } from "@/lib/auth";
+import { AuthenticatedUiProvider } from "@/providers/authenticated-ui-provider";
 import classes from "@/components/layout/admin-shell.module.css";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+async function AdminLayoutContent({ children }: { children: ReactNode }) {
+  await requireAdmin();
+
   return (
-    <UiStoreProvider>
+    <AuthenticatedUiProvider>
       <AdminShell>
         <Anchor href="#main-content" className={classes.skipLink}>
           Skip to main content
@@ -31,6 +35,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Container>
         </AppShellMain>
       </AdminShell>
-    </UiStoreProvider>
+    </AuthenticatedUiProvider>
+  );
+}
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <Container size="xl" p="xl">
+          <PageLoading />
+        </Container>
+      }
+    >
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </Suspense>
   );
 }

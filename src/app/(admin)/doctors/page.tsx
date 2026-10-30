@@ -1,11 +1,16 @@
 import { Badge, Card, Center, EmptyState, Stack } from "@mantine/core";
 import { IconStethoscope } from "@tabler/icons-react";
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { PageLoading } from "@/components/shared/page-loading";
+import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Doctors" };
 
-export default function DoctorsPage() {
+async function DoctorsContent() {
+  await requireAdmin();
+
   return (
     <Stack gap="xl">
       <PageHeader
@@ -28,5 +33,13 @@ export default function DoctorsPage() {
         </Center>
       </Card>
     </Stack>
+  );
+}
+
+export default function DoctorsPage() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <DoctorsContent />
+    </Suspense>
   );
 }

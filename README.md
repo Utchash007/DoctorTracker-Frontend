@@ -1,10 +1,10 @@
 # Doctor Tracker — Frontend
 
-Doctor Tracker brings doctor profiles, patient records, and care activity into one administrative workspace. This Next.js client uses Mantine library components, a dark slate-and-teal theme, and focused Zustand UI stores. The separately deployed Express API supplies the application data.
+Doctor Tracker brings doctor profiles, patient records, and care activity into one administrative workspace. This Next.js client uses Mantine library components, light and dark slate-and-teal themes, Clerk authentication, and focused Zustand UI stores. The separately deployed Express API supplies the application data.
 
 ## Current phase
 
-**F1 — scaffold and navigation.** `/` redirects to `/dashboard`; Dashboard, Doctors, and Patients render preview pages with loading skeletons. The responsive shell includes shared mobile-navigation state. Clerk authentication arrives in F2, the server-only API layer in F3, and data features in F4–F7.
+**F2 — Clerk authentication and day/night modes.** `/` redirects to `/dashboard`; Dashboard, Doctors, and Patients are admin-protected preview pages with loading skeletons. The public `/sign-in` route uses Clerk's prebuilt sign-in flow, and signed-in non-admins reach `/forbidden`. The server-only API layer arrives in F3 and data features in F4–F7.
 
 ## Setup
 
@@ -13,10 +13,40 @@ Use your installed **Node.js 26.x** (`.nvmrc`) and npm for local development and
 ```powershell
 npm ci
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
+# Configure .env and your Clerk application as described below.
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). F1 works with placeholder environment values. For F2 onward, fill in your local `.env` using the variable names in `.env.example`; the API base URL is `http://localhost:5000/api`. Keep the Clerk secret key in server runtime.
+Open [http://localhost:3000](http://localhost:3000). Fill in your local `.env` using `.env.example` before starting or building:
+
+| Variable | Value |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:5000/api` locally; hosted production APIs use HTTPS |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Your Clerk application's `pk_...` key |
+| `CLERK_SECRET_KEY` | The matching `sk_...` key; server-only |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/sign-in` |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
+| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
+
+`src/lib/env.ts` validates required configuration without logging values. Loopback HTTP is allowed for local production-mode smoke tests. F2 previews do not need a running API.
+
+### Clerk application
+
+1. Enable your preferred sign-in methods (Google and/or email/password).
+2. Create an administrator in the Clerk Dashboard and set their **public metadata** to `{ "role": "admin" }`.
+3. In **Sessions → Customize session token**, add the claim:
+
+   ```json
+   { "publicMetadata": "{{user.public_metadata}}" }
+   ```
+
+4. Sign out and back in after changing metadata/token configuration. An absent or different role is denied access.
+
+Clerk preserves the intended return URL, including a deep link such as `/doctors?search=card`. Sign-out returns to `/sign-in`. New accounts require explicit administrator metadata before accessing the workspace.
+
+### Light and dark modes
+
+The first visit follows your system preference. Use the sun/moon button on the sign-in, workspace, or access-denied page to switch modes. Mantine saves the preference across reloads and syncs it between tabs; Clerk forms and account menus use the same colors.
 
 The font is self-hosted by `next/font`; the initial development compilation and production build need access to Google Fonts to obtain Geist.
 
@@ -30,9 +60,9 @@ The font is self-hosted by `next/font`; the initial development compilation and 
 | `npm run build` | Production build |
 | `npm start` | Serve the production build on port 3000 |
 
-All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine **9.7.4**, Zustand **5.0.16**, and TypeScript **5.9.3**.
+All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine **9.7.4**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, and TypeScript **5.9.3**.
 
-Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` usage. Development and production builds use default Turbopack; ESLint uses Next's native flat config. Cache Components is not enabled. Clerk's `src/proxy.ts` integration arrives in F2.
+Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` usage. Development and production builds use default Turbopack; ESLint uses Next's native flat config. Cache Components is not enabled. `src/proxy.ts` uses bare `clerkMiddleware()`; each protected page independently checks the session and admin role before rendering data.
 
 ## Structure and state
 
@@ -40,27 +70,35 @@ Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` u
 src/
   app/                  # Server-first layouts, pages, and loading boundaries
     (admin)/            # Dashboard, doctors, and patients
+    sign-in/            # Public optional catch-all Clerk sign-in flow
+    forbidden/          # Authenticated access-denied page with sign-out
   components/
+    auth/               # Mantine auth-page shell and skeletons
     layout/             # Mantine AppShell, header, and navigation compositions
-    shared/             # Page heading and loading compositions
-  providers/            # Mantine theme and scoped Zustand providers
+    shared/             # Page headings, loading and theme controls
+  lib/                  # Server-only environment and auth/role helpers
+  providers/            # Mantine theme and identity-scoped Zustand providers
   stores/               # Typed vanilla Zustand store factories
-  theme.ts              # Slate + teal tokens and Mantine component defaults
+  types/                # Clerk custom session-claim declarations
+  theme.ts              # Light/dark slate + teal tokens and component defaults
+  proxy.ts              # Clerk session middleware and route matcher
 ```
 
-The admin layout creates one Zustand store per mounted provider scope. The Burger, AppShell, and navigation subscribe only to the fields/actions they use. The store starts closed on both server and client, closes on link navigation or Escape, and is recreated on a full page load. Collapsed mobile navigation is also hidden from keyboard focus through Mantine's Styles API.
+The admin layout creates one Zustand store per mounted provider scope. The Burger, AppShell, and navigation subscribe only to the fields/actions they use. The store starts closed on both server and client, closes on link navigation or Escape, and is recreated on a full page load or Clerk identity/session change. Collapsed mobile navigation is also hidden from keyboard focus through Mantine's Styles API.
 
-Shared UI belongs to Zustand; committed list filters belong to URL parameters; form values belong to Mantine Form. API access will run in Server Components and Server Actions, forwarding a fresh Clerk session token to Express.
+Shared transient UI belongs to Zustand; committed list filters belong to URL parameters; form values belong to Mantine Form. Clerk owns authentication and Mantine owns the saved theme preference. API access will run in Server Components and Server Actions, forwarding a fresh Clerk session token to Express.
 
-## F1 smoke test
+`requireAdmin()` protects read drivers. Future actions must independently call `authorizeAdminAction()` before API work: signed-out access redirects to sign-in; signed-in non-admin access returns a safe `{ ok: false, status: 403, code: "FORBIDDEN", message }` result. The `/forbidden` page calls only `requireSession()` so denied users can sign out without an authorization loop. Tokens and full auth objects stay in server runtime.
 
-1. Visit `/` and confirm the redirect to `/dashboard`.
-2. Use Dashboard, Doctors, and Patients in the sidebar. Each page should load and highlight its active link.
-3. At a mobile width (for example 390 px), open and close the Burger. Choosing a route closes the navigation; Escape closes it and returns focus to the Burger.
-4. Reload with navigation open and confirm it starts closed. Check a second tab has independent navigation state.
-5. Tab from the top of the page to the skip link and activate it to reach the main content.
-6. Run lint, typecheck, and build, then repeat navigation using `npm start`. Check the browser console for hydration errors and the viewport for horizontal overflow.
+## F2 smoke test
 
-F1 verification passed on Node **26.13.0**: clean install, dependency checks, lint, typecheck, production build, and desktop/mobile browser smoke checks in development and production. The install audit reports zero vulnerabilities.
+1. Signed out, visit `/`, `/dashboard`, `/doctors`, `/patients`, and `/forbidden`. Each should reach local `/sign-in` without showing protected content.
+2. Visit `/doctors?search=card`, sign in as an admin through Clerk (including any verification step), and confirm that the deep link is restored. Check all three sidebar destinations and the account menu.
+3. Switch light/dark modes; reload and open another tab to check the saved preference. Check both modes at desktop and 320/390 px mobile widths, including the Clerk form/account popover.
+4. On mobile, open/close the Burger, choose a route, and press Escape. Check route-close behavior and focus return. Reload with the menu open and confirm it starts closed; another tab has independent navigation state.
+5. Sign out through the account menu and confirm `/sign-in`. Sign in using an account without the admin claim: it should reach `/forbidden`, show no workspace data, and allow sign-out. Theme preference survives sign-out; transient menu state does not.
+6. On the admin shell, activate the keyboard skip link to reach the main content. Run lint, typecheck and build, then repeat smoke checks with `npm start`; check for hydration errors and horizontal overflow.
+
+F1 verification passed on Node **26.13.0**: clean install, dependency checks, lint, typecheck, production build, and desktop/mobile browser smoke checks in development and production.
 
 The complete feature walkthrough, technical-decision deep dives, deployment details, and desktop/mobile screenshots are delivered in F8.
