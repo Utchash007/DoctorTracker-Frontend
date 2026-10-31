@@ -96,21 +96,27 @@ Open [http://localhost:3000](http://localhost:3000). Fill in your local `.env` u
 | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 
-`src/lib/env.ts` validates required configuration without logging values. The dashboard needs the backend running on port 5000 and a configured Clerk administrator (its setup guide: `DoctorTracker-Backend/README.md`).
+`src/lib/env.ts` validates required configuration without logging values. The dashboard needs the backend running on port 5000 and the Clerk application configured per the checklist below (its counterpart guide: `DoctorTracker-Backend/README.md`).
 
 ### Clerk application
 
+This assessment build is configured for open access: every signed-in account carries the admin role automatically, so evaluators can sign up with any email and use the full workspace with no dashboard setup:
+
 1. Enable your preferred sign-in methods (Google and/or email/password).
-2. Create an administrator in the Clerk Dashboard and set their **public metadata** to `{ "role": "admin" }`.
-3. In **Sessions → Customize session token**, add the claim:
+2. In **Sessions → Customize session token**, set the template that issues the admin role to every session:
 
    ```json
-   { "publicMetadata": "{{user.public_metadata}}" }
+   {
+     "publicMetadata": {
+       "role": "admin"
+     }
+   }
    ```
 
-4. Sign out and back in after changing metadata/token configuration. An absent or different role is denied access.
+3. Keep **Organizations** disabled for the Clerk instance (Dashboard → Organizations settings), so the prebuilt sign-in and account menus never show create-organization steps.
+4. Sign out and back in after changing the template; already-issued tokens refresh with the new claim within about a minute.
 
-Clerk preserves the intended return URL, including a deep link such as `/doctors?search=card`. Sign-out returns to `/sign-in`. New accounts require explicit administrator metadata before accessing the workspace.
+The per-session role check in the code remains as defense in depth (`requireAdmin`, `authorizeAdminAction`, the API's `authorize('admin')` and the `/forbidden` page), but with the template above no per-user metadata is needed. Clerk preserves the intended return URL, including a deep link such as `/doctors?search=card`, and sign-out returns to `/sign-in`.
 
 ### Light and dark modes
 
@@ -171,7 +177,7 @@ The one trade-off deliberately accepted: Mantine 9 requires the React runtime th
 2. Set **all environment variables before deploying** (public values are inlined at build time): `NEXT_PUBLIC_API_URL=https://<api-host>/api`, the Clerk `pk_...` and `sk_...` keys, and the local sign-in/fallback URLs. Configure Clerk's production application/domain for the deployed frontend; keep all `NEXT_PUBLIC_*` values consistent between your build and runtime environments.
 3. On the API side (`DoctorTracker-Backend`): `CLERK_JWT_KEY` set, and `CORS_ORIGIN` includes the deployed frontend URL, matching scheme/host/port exactly with no trailing slash.
 4. **Timeouts.** The API timeout is 60 s; configure this app's server-render/action function duration above it (e.g. 70 s where the account/runtime supports it) so the client does not abandon requests the API can still complete. If a shorter duration is used instead, disclose cold-start read retries. Writes are never retried automatically after a timeout.
-5. Then run the production smoke passes: signed-out redirect and nested sign-in; admin dashboard/CRUD; denied non-admin and direct mutation rejection; doctor/patient date filters; stale/last-page deletion; safe API failures; responsive navigation; sign-out.
+5. Then run the production smoke passes: signed-out redirect and nested sign-in; admin dashboard/CRUD as a fresh (or existing) sign-in, which carries admin automatically; direct unauthenticated mutation rejection; doctor/patient date filters; stale/last-page deletion; safe API failures; responsive navigation; sign-out.
 
 **Cold starts:** free-tier API instances sleep when idle, so the first page load after a pause can take **30+ seconds**. That is the backend provider's cold start, not a client defect; a subsequent request is fast.
 
