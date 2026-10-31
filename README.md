@@ -84,7 +84,7 @@ src/
     doctors/            # Doctors table, filters, pagination and modal CRUD
     doctor-detail/      # Doctor profile card, patients table, add/remove dialogs
     patients/           # Patients directory table, filters, edit/delete dialogs
-  lib/                  # Server-only env, auth/role helpers, and lib/api/ server client
+  lib/                  # Server-only env, auth/role helpers, lib/api/ server client, lib/validation/ write-input contracts
   providers/            # Mantine theme and identity-scoped Zustand providers
   stores/               # Typed vanilla Zustand store factories
   types/                # Clerk custom session-claim declarations

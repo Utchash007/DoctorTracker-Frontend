@@ -7,47 +7,10 @@ import { authorizeAdminAction } from "@/lib/auth";
 import { createDoctor, deleteDoctor, updateDoctor } from "@/lib/api/client";
 import { mapApiErrorToAction, mapDoctorWriteFailure } from "@/lib/api/errors";
 import type { ActionResult } from "@/lib/api/types";
-
-const phoneRegex = /^[0-9+().\- ]{7,20}$/;
-
-export const createDoctorInputSchema = z.object({
-  name: z
-    .string({ error: "Name is required" })
-    .trim()
-    .min(2, "Name must be at least 2 characters")
-    .max(100, "Name must be at most 100 characters"),
-  specialization: z
-    .string({ error: "Specialization is required" })
-    .trim()
-    .min(1, "Specialization is required")
-    .max(100, "Specialization must be at most 100 characters"),
-  hospital: z
-    .string({ error: "Hospital is required" })
-    .trim()
-    .min(1, "Hospital is required")
-    .max(150, "Hospital must be at most 150 characters"),
-  phone: z
-    .string({ error: "Phone is required" })
-    .trim()
-    .regex(
-      phoneRegex,
-      "Phone must be 7-20 characters using digits, spaces, + ( ) . -",
-    ),
-  email: z
-    .string({ error: "Email is required" })
-    .trim()
-    .toLowerCase()
-    .pipe(z.email("Enter a valid email")),
-});
-
-export const updateDoctorInputSchema = createDoctorInputSchema
-  .partial()
-  .refine((data) => Object.keys(data).length > 0, {
-    message: "Provide at least one field to update",
-  });
-
-export type CreateDoctorInput = z.infer<typeof createDoctorInputSchema>;
-export type UpdateDoctorInput = z.infer<typeof updateDoctorInputSchema>;
+import {
+  createDoctorInputSchema,
+  updateDoctorInputSchema,
+} from "@/lib/validation/doctors";
 
 function issuesToFields(issues: z.ZodIssue[]): Record<string, string> {
   const fields: Record<string, string> = {};
