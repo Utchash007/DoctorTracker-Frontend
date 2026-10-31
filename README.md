@@ -1,16 +1,82 @@
 # Doctor Tracker — Frontend
 
-Doctor Tracker brings doctor profiles, patient records, and care activity into one administrative workspace. This Next.js client uses Mantine library components, light and dark slate-and-teal themes, Clerk authentication, and focused Zustand UI stores. The separately deployed Express API supplies the application data.
+## Elevator Pitch
 
-## Current phase
+Doctor Tracker gives a clinic administrator one secure workspace for every doctor, every patient, and who is treating whom: doctor profiles with full CRUD and directory search, patient records with directory-wide search/filter/sort, doctor-to-patient assignment, and a live dashboard of head-count, registration and activity trends. This repository is the Next.js client behind that portal — a server-first App Router app running Mantine 9 library components in a slate-and-teal light/dark theme, delegating identity and the admin role to Clerk, and consuming the separately deployed Express API exclusively from server-side rendering and Server Actions, so no session token or API endpoint is ever exposed to the browser.
 
-**F7 — Patients list page with edit and delete.** The protected `/patients` route is a full server-rendered directory: every patient with a nullable doctor name column ("Unassigned" when no link) plus debounced name search, an exact condition filter, a created-date range, sort, and pagination — all state committed to URL search params mapped 1:1 to API queries, with server-side out-of-range and empty-page recovery. `doctorId` deep links remain supported and surface as a chip with its own clear control; the deferred doctor selector is deliberately absent. Edit is a per-record reset Mantine Modal that sends only the changed PATCH fields and keeps gender `clearable={false}` (the API cannot clear a supplied gender — nothing here falsely claims it can); Delete confirms that both the patient and their doctor link are removed. There is **no Add-patient button on this page** — records are created only under a doctor's detail page. Writes run through independently authorized Server Actions with stale-404 refresh handling.
+---
 
-Every API call stays in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs. Mutations return serializable `ActionResult` payloads; validation and duplicate-email errors map directly into Mantine Form fields.
+## Architecture
 
-## Setup
+```
+Browser
+  │  (Clerk session cookie, same-origin to this Next.js app)
+  ▼
+Next.js client on Vercel   — you are here
+  │  Server Runtime (RSC loaders + Server Actions)
+  │  Authorization: Bearer <Clerk session token> from auth().getToken()
+  │  REST/JSON over HTTPS
+  ▼
+Express API on Render/Railway  ──verifyToken(CLERK_JWT_KEY)──►  Clerk
+  │
+  ▼
+Prisma 6.x
+  │
+  ▼
+MongoDB Atlas (replica set)
+```
 
-Use your installed **Node.js 26.x** (`.nvmrc`) and npm for local development and checks. `engines.node` accepts `24.x || 26.x` because Vercel currently offers Node 24.x as its newest hosted runtime; F8 will verify the hosted runtime. Run these commands from this repository's root:
+- **Server-first data access.** Pages are React Server Components by default; every list query, mutation and token read happens in the server runtime (`src/lib/api/client.ts` transparently attaches the Bearer token from `auth().getToken()`). The browser never calls the Express API directly — there are no browser-side fetch effects and no API URLs in client bundles. Mutations are Server Actions that return a typed `ActionResult` to forms and call `router.refresh()` on success.
+- **Clerk owns identity.** Sign-in uses the prebuilt `<SignIn/>` component with nested verification; the admin role arrives as `publicMetadata.role = "admin"` in the session token. Bare `clerkMiddleware()` (`src/proxy.ts`) protects route matching, while each page and action independently re-checks the session and role in the server runtime. `/forbidden` checks authentication only, so a signed-in non-admin can sign out instead of looping; tokens never cross the RSC boundary to client components.
+- **State composition.** Committed list state — search, filters, sort, pagination, date ranges — lives in the URL search params and maps 1:1 to API query strings, with server-side normalization of junk/out-of-range pages. Transient UI (mobile navbar, dialog visibility) lives in small feature-scoped Zustand stores that start closed on server and client and reset per identity. Mantine Form owns form values; Mantine owns the saved color-scheme preference.
+- **Recovery layers.** Expected API failures (403, 404, 401, rate limits, network) render as safe in-page callouts from server loaders — never as generic error screens. Unexpected segment failures fall to `error.tsx`, root-layout failures to `global-error.tsx` (self-contained HTML, Clerk-independent), unmatched/malformed ids to the shared not-found page, and denials to `/forbidden`.
+
+### Tech stack
+
+| Area | Choice |
+|---|---|
+| Framework | Next.js 16.4.3 (App Router, Turbopack, React 19.2.9) |
+| UI system | Mantine 9.7.4 (`@mantine/core`, `form`, `dates`, `hooks`, `charts` on Recharts 3.10.1) |
+| Icons | `@tabler/icons-react` |
+| Auth | Clerk (`@clerk/nextjs` 7.9.22, prebuilt `<SignIn/>` / `<UserButton/>`) |
+| Client state | Zustand 5.0.16 (transient UI stores only) |
+| Validation | Zod 4.6.7 (server-side form-input contracts mirroring the API) |
+| Tests | Vitest 5.0.5 (unit/contract suites, 125 tests) |
+| TypeScript | 5.9.3, strict — 0 `any` policy |
+
+### Repository layout
+
+```text
+src/
+  app/                  # Server-first layouts, pages, and loading boundaries
+    (admin)/
+      dashboard/        # KPI cards, patients-per-doctor ranking, activity timeline
+      doctors/          # Doctors table, filters, pagination and modal CRUD
+      doctor-detail/    # Doctor profile card, patients table, add/remove dialogs
+      patients/         # Patients directory table, filters, edit/delete dialogs
+    forbidden/          # Signed-in, non-admin landing page (no role loop)
+    error.tsx           # Route-segment failure fallback (retry + digest)
+    global-error.tsx    # Root-layout failure: own html/body, Clerk-independent
+  components/           # Mantine-composed feature components and small client leaves
+  lib/                  # Server-only env, auth/role helpers, lib/api/ server client, lib/validation/ write-input contracts
+  providers/            # Mantine theme and identity-scoped Zustand providers
+  stores/               # Typed vanilla Zustand store factories
+  types/                # Clerk custom session-claim declarations
+  theme.ts              # Light/dark slate + teal tokens and component defaults
+  proxy.ts              # Clerk session middleware and route matcher
+
+tests/                  # Vitest unit/contract suites (mocked Clerk auth + API transport)
+```
+
+The admin layout creates one Zustand store per mounted provider scope. The Burger, AppShell, and navigation subscribe only to the fields/actions they use. The store starts closed on both server and client, closes on link navigation or Escape, and is recreated on a full page load or Clerk identity/session change. Collapsed mobile navigation is also hidden from keyboard focus through Mantine's Styles API.
+
+Every read page runs `requireAdmin()`; every mutation independently calls `authorizeAdminAction()` before API work: signed-out access redirects to sign-in (preserving deep links), a signed-in non-admin gets a safe typed 403, and direct mutation attempts are rejected server-side. Screens are composed from Mantine library components end to end — no hand-rolled tables, modals, pickers or toasts.
+
+---
+
+## Setup Guide
+
+Use your installed **Node.js 26.x** (`.nvmrc`) and npm for local development and checks. `engines.node` accepts `24.x || 26.x` because Vercel currently offers Node 24.x as its newest hosted runtime; see [Deployment](#deployment-vercel). Run these commands from this repository's root:
 
 ```powershell
 npm ci
@@ -30,7 +96,7 @@ Open [http://localhost:3000](http://localhost:3000). Fill in your local `.env` u
 | `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/dashboard` (optional default) |
 
-`src/lib/env.ts` validates required configuration without logging values. Loopback HTTP is allowed for local production-mode smoke tests. The dashboard needs the backend running on port 5000 and a configured Clerk administrator.
+`src/lib/env.ts` validates required configuration without logging values. The dashboard needs the backend running on port 5000 and a configured Clerk administrator (its setup guide: `DoctorTracker-Backend/README.md`).
 
 ### Clerk application
 
@@ -57,94 +123,120 @@ The font is self-hosted by `next/font`; the initial development compilation and 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Development server on port 3000 |
+| `npm start` | Serve the production build on port 3000 |
 | `npm run lint` | ESLint checks |
 | `npm run typecheck` | Generate Next route types and run strict TypeScript checks |
 | `npm run test:unit` | Vitest unit/contract tests with mocked Clerk auth and API transport |
 | `npm run build` | Production build |
-| `npm start` | Serve the production build on port 3000 |
 
 All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine (including charts) **9.7.4**, Recharts **3.10.1**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, Zod **4.6.7**, Vitest **5.0.5**, and TypeScript **5.9.3**.
 
 Next.js 16 supplies the React runtime required by Mantine 9's `useEffectEvent` usage. Development and production builds use default Turbopack; ESLint uses Next's native flat config. Cache Components is not enabled. `src/proxy.ts` uses bare `clerkMiddleware()`; each protected page independently checks the session and admin role before rendering data.
 
-## Structure and state
+---
 
-```text
-src/
-  app/                  # Server-first layouts, pages, and loading boundaries
-    (admin)/            # Dashboard, doctors, and patients
-    sign-in/            # Public optional catch-all Clerk sign-in flow
-    forbidden/          # Authenticated access-denied page with sign-out
-  components/
-    auth/               # Mantine auth-page shell and skeletons
-    layout/             # Mantine AppShell, header, and navigation compositions
-    shared/             # Page headings, loading/theme controls, error callouts, manual retry
-    dashboard/          # Independently streamed summary, ranking and timeline panels
-    charts/             # Mantine charts and the URL-driven timeline range control
-    doctors/            # Doctors table, filters, pagination and modal CRUD
-    doctor-detail/      # Doctor profile card, patients table, add/remove dialogs
-    patients/           # Patients directory table, filters, edit/delete dialogs
-  lib/                  # Server-only env, auth/role helpers, lib/api/ server client, lib/validation/ write-input contracts
-  providers/            # Mantine theme and identity-scoped Zustand providers
-  stores/               # Typed vanilla Zustand store factories
-  types/                # Clerk custom session-claim declarations
-  theme.ts              # Light/dark slate + teal tokens and component defaults
-  proxy.ts              # Clerk session middleware and route matcher
+## Technical Decisions
 
-tests/                  # Vitest unit/contract suites (mocked Clerk auth + API transport)
-```
+### Decision 1 — Server-first rendering with URL-committed list state (and why the browser never talks to the API)
 
-The admin layout creates one Zustand store per mounted provider scope. The Burger, AppShell, and navigation subscribe only to the fields/actions they use. The store starts closed on both server and client, closes on link navigation or Escape, and is recreated on a full page load or Clerk identity/session change. Collapsed mobile navigation is also hidden from keyboard focus through Mantine's Styles API.
+The most consequential architectural choice is the direction of every data request. In the common Next.js CRUD demo pattern, client components fetch with `useEffect`, hold list state in `useState`, and talk to the API from the browser. That approach was rejected here in favor of a fully server-first data path, for three reasons.
 
-Shared transient UI belongs to Zustand; committed list filters belong to URL parameters; form values belong to Mantine Form. Clerk owns authentication and Mantine owns the saved theme preference. API access runs in server runtime only (`src/lib/api/client.ts`), forwarding a fresh Clerk session token to Express — the browser never calls the API.
+**Security surface collapsed to zero browser-side.** The Express API authenticates every request with `Authorization: Bearer <Clerk session token>`. If the browser made those calls, the token would have to be handed to client JavaScript and the whole API surface (including every filter/route combination builders could probe) would be reachable from any logged-in context. Instead, RSC loaders read a fresh token via `auth().getToken()` and Server Actions forward mutations — the API URL appears in `NEXT_PUBLIC_` env only as a *server-runtime* base URL, customer browser bundles never resolve the Express service, and each caller is re-authorized server-side (`requireAdmin()` / `authorizeAdminAction()`), so even a crafted client-side request to the app fails before any API call exists.
 
-`requireAdmin()` protects read drivers. Future actions must independently call `authorizeAdminAction()` before API work: signed-out access redirects to sign-in; signed-in non-admin access returns a safe `{ ok: false, status: 403, code: "FORBIDDEN", message }` result. The `/forbidden` page calls only `requireSession()` so denied users can sign out without an authorization loop. Tokens and full auth objects stay in server runtime.
+**Searching, filtering, sorting and pagination happen in one engine: MongoDB.** Every list control maps 1:1 to an API query parameter (`/doctors?search=card&sort=name_asc&page=2&limit=10`), so the page renders exactly what the API computes — `where`/`orderBy`/`skip`/`take` server-side, with indexes and metadata-driven page recovery (`/doctors` redirects an out-of-range `page` to the last valid page). There is no second implementation of filtering in JavaScript to keep in sync with the API's, no possibility of handing the browser an unbounded collection to slice, and no stale local copy: mutations call `router.refresh()` and the URL is re-rendered.
 
-## F2 smoke test
+**URL state doubles as the app's state store.** Because state is committed to the URL, browser Back/Forward restore both the URL and its matching data (verified with staged `DatePickerInput` drafts that only commit on apply), any filtered view is a shareable/bookmarkable deep link, and a reload restarts identically. Server-side normalization also silently canonicalizes junk parameters. What does *not* belong in the URL is separated by ownership: transient UI (mobile navbar, dialog visibility) lives in small feature-scoped Zustand stores that start closed on server and client, reset per Clerk identity change, and never persist; form values live in Mantine Form; the theme preference belongs to Mantine. This split keeps hydration-free rendering for dynamic data while leaving only genuinely ephemeral interactions in JavaScript memory.
 
-1. Signed out, visit `/`, `/dashboard`, `/doctors`, `/patients`, and `/forbidden`. Each should reach local `/sign-in` without showing protected content.
-2. Visit `/doctors?search=card`, sign in as an admin through Clerk (including any verification step), and confirm that the deep link is restored. Check all three sidebar destinations and the account menu.
-3. Switch light/dark modes; reload and open another tab to check the saved preference. Check both modes at desktop and 320/390 px mobile widths, including the Clerk form/account popover.
-4. On mobile, open/close the Burger, choose a route, and press Escape. Check route-close behavior and focus return. Reload with the menu open and confirm it starts closed; another tab has independent navigation state.
-5. Sign out through the account menu and confirm `/sign-in`. Sign in using an account without the admin claim: it should reach `/forbidden`, show no workspace data, and allow sign-out. Theme preference survives sign-out; transient menu state does not.
-6. On the admin shell, activate the keyboard skip link to reach the main content. Run lint, typecheck and build, then repeat smoke checks with `npm start`; check for hydration errors and horizontal overflow.
+The cost of this pattern is measured, and accepted: list pages are dynamic (rendered per request with the API's latency), which is why expected API failures render as safe in-page callouts with retry, rate-limit deadlines are surfaced, and the [deployment](#deployment-vercel) section covers API cold starts and function durations rather than papering over them client-side.
 
-F1 verification passed on Node **26.13.0**: clean install, dependency checks, lint, typecheck, production build, and desktop/mobile browser smoke checks in development and production.
+### Decision 2 — Mantine 9 as the single UI system: only library components, composed and themed
 
-## F4 dashboard smoke test
+The UI policy is strict: **every visible control comes from an installed library** — Mantine 9 (`@mantine/core`, `@mantine/form`, `@mantine/dates`, `@mantine/charts`), `@tabler/icons-react`, and Clerk's prebuilt `<SignIn/>`/`<UserButton/>`. No table, modal, select, combobox, date picker, pagination, toast or form in this repo is hand-rolled. Components are *composed* — server-rendered layouts assembling Mantine parts, small client wrappers for interactive leaves — and extended through sanctioned extension points (`classNames`/`styles`, Styles API, `createTheme`, `cssVariablesResolver`) rather than by rebuilding primitives.
 
-1. Start the backend and verify `GET http://localhost:5000/api/health`, then run this client with `npm run dev` and sign in as a Clerk admin.
-2. Open `/dashboard`. Check total doctors/patients, new registrations since Monday 00:00 UTC, the top-ten patient ranking, and the last 30 days of daily activity. The date-range control affects only the daily chart.
-3. Select 7 and 90 days, then use browser back/forward. Both selection and chart should match the URL. Selecting 30 days restores `/dashboard`; invalid or repeated range parameters normalize to a canonical URL.
-4. Check light/dark modes at desktop and 320/390 px mobile widths. Verify chart tooltips (full doctor names), keyboard range selection, and mobile navigation. Empty rankings and all-zero timelines should show explanatory library empty states.
-5. For a local read-failure check, stop the local API and change the range. Expect safe panel feedback; restart the API and choose **Retry**. Rate-limited responses disable retry until their deadline. A still-active Clerk session rejected by the API offers retry/sign-out; expired sessions return to sign-in.
-6. Repeat the auth checks above with your admin and non-admin accounts, and run the dashboard smoke in production mode with `npm run build` followed by `npm start`.
+Why commit to one system instead of mixing specialized libraries? The failure mode of bespoke UI is well known: a hand-rolled modal without focus trapping, a custom table with broken keyboard navigation, a filter bar whose two sources of truth disagree. Mantine provides those properties for free: `Modal` ships focus management, `TextInput`/`PasswordInput`/`Select` ship accessible controls, `Pagination`, `Table`, `DatePickerInput`, `LineChart` and `EmptyState` arrive as finished, themeable components. Writing our own would be writing all of that again, twice — once for light mode and once for dark.
 
-## F5 doctors directory smoke test
+Mantine 9 was chosen over component sets because of three concrete capabilities the design depends on:
 
-1. Navigate to `/doctors`. Confirm that the table renders the doctors list with doctor names, specializations, hospitals, phone numbers, emails, and joined dates.
-2. **Search and filtering**: Type in the search box; confirm debounced URL update and filtered results. Filter by specialization, hospital, and date range (`from`/`to`). Confirm that changing filters resets the page to 1.
-3. **Sorting and pagination**: Sort by newest, oldest, name (A–Z), and name (Z–A). Change page limit (10, 20, 50) and navigate between pages.
-4. **Create Doctor**: Click **New Doctor**. Fill in valid details and submit. Confirm that the modal closes, the list updates, and the doctor appears. Test duplicate email validation and verify the inline error feedback.
-5. **Edit Doctor**: Click the Edit icon on a doctor row. Change a field and save. Verify that the updated record renders. Verify that submitting without changes is disabled.
-6. **Delete Doctor**: Click the Delete icon on a doctor. Confirm the modal prompt. Deleting a doctor with patients surfaces the API conflict message (409) and leaves the modal open. Deleting a doctor without patients succeeds and refreshes the directory.
+- **CSS variables + a first-class color-scheme manager.** F2's user-approved light/dark requirement is fulfilled by Mantine's own persistence (localStorage, `ColorSchemeScript defaultColorScheme="auto"`, cross-tab sync) — no custom theme store — and the same tokens drive Clerk's appearance, so sign-in and the account menu match the workspace everywhere.
+- **Uncontrolled form primitives with per-field validation.** `useForm` runs uncontrolled with `key={form.key('field')}`, validating inputs against Zod-mirrored field rules without the re-render tax of controlled inputs across a table-heavy admin UI, while Server Actions remain the only submit path and map API 4xx errors into the same form surface.
+- **Dates and charts inside the same theme.** `@mantine/dates` (doctor joined-date filters, patient created-range, dashboard range) and `@mantine/charts` (activity timeline, ranking) inherit the existing tokens instead of shipping a second visual language, with their required peers (`dayjs`, `recharts`) pinned explicitly.
 
-## F6 doctor detail smoke test
+The one trade-off deliberately accepted: Mantine 9 requires the React runtime that Next 16 bundles (its `useEffectEvent`), which set the framework version floor. That was a single, versioned dependency decision — and materially cheaper than maintaining a patchwork of custom controls across two themes, five route families and four breakpoints.
 
-1. From `/doctors`, click a doctor's name (or the eye icon) to reach `/doctors/<id>`. Confirm the doctor card (name, specialization, hospital, phone, email, joined date UTC) and the patients table with assigned dates.
-2. **Patient filters**: type in the patient search (debounced URL update) and a full condition (exact match); confirm changes reset the page, back/forward reproduces the URL/data, and invalid/junk params normalize. Change the page limit and navigate pages; deleting the last patient on the last page recovers to a valid page.
-3. **Add Patient**: click **Add Patient**, fill in name, integer age (the field rejects decimals), optional clearable gender, phone, and condition, then submit. The modal closes, the table and the dashboard update, and the patient appears in `/patients` for F7 verification. An unset gender is omitted from the create body.
-4. **Remove Patient**: click the trash icon on a patient row, confirm the wording states that both the patient and the link are deleted, then remove it. The table, dashboard, and any other open lists refresh; removing a stale record shows the safe message and refreshes.
-5. Directly open `/doctors/abc123` and any malformed id: both render the shared not-found page. Open a valid id whose doctor was deleted: the loader recovers to not-found. Stop the API and visit a doctor detail page: the panel callout with **Retry** appears; restart the API and retry. Non-admin accounts are denied with no data shown, and sign-in still returns to the deep link.
-6. Check light/dark modes at desktop and 320/390 px mobile widths (table scroll, modal focus, keyboard labels), then run the same checks in production mode with `npm run build` followed by `npm start`.
+---
 
-## F7 patients smoke test
+## Deployment (Vercel)
 
-1. Open `/patients`. Confirm the table shows every patient with Patient, Age (null gender renders "Not set"), Phone, Condition, Doctor ("Unassigned" when missing), and Created columns. There is **no Add-patient button** — not in the header, table empty state, or anywhere else.
-2. **Filters and sorting**: type in the name search (debounced ~400 ms URL update), enter an exact condition (full word, e.g. `Hypertension`), pick a created-date range, switch sort options, and change page/limit. Confirm every change resets the page to 1, back/forward reproduces the URL and data, and junk/invalid params normalize silently. **Reset** clears search, condition, dates, sort (and any deep-link filter); the pagination row disappears when 0 results match.
-3. **Deep link**: from a doctor's detail page copy its URL, or open `/patients?doctorId=<24-hex id from the API list>`. Confirm the dashboard narrows to that doctor's patients with the "Filtered to one doctor" chip; click **Clear filter** to drop only the doctor filter, keeping the other filters.
-4. **Edit patient**: click the edit icon. Confirm each opened record starts fresh, unchanged records have the submit disabled, and only changed fields are PATCHed (observe the API logs if handy). Age accepts integers 0–130 only; gender is **not clearable** — a set gender can be replaced but not blanked. Save, and verify `/patients`, the relevant doctor's detail page, and the dashboard reflect the change.
-5. **Delete patient**: click the trash icon; confirm the modal states that both the patient and their doctor link are deleted. Cancel keeps everything; confirm removes the row, and the doctor's detail page loses the patient on its next visit. Delete the only patient on the last page — the app recovers to a valid page. A stale delete (record removed elsewhere) shows the safe message and refreshes the list.
-6. Check light/dark modes at desktop and 320/390 px mobile widths (table scroll, chip wrap, modal focus, keyboard labels), then run the same checks in production mode with `npm run build` followed by `npm start`.
+1. Import `DoctorTracker-Frontend` into Vercel with **Root Directory left at the repository root (`.`)** and the Next.js framework preset. The [hosted Node version list](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions), checked 2026-10-30, offers 24.x and 22.x; 24.x is permitted by `engines.node: "24.x || 26.x"` and is the expected hosted runtime until 26.x lands. Local development and CI run the user's Node 26.x. Install from the committed lockfile (`npm ci` behavior).
+2. Set **all environment variables before deploying** — public values are inlined at build time: `NEXT_PUBLIC_API_URL=https://<api-host>/api`, the Clerk `pk_...` and `sk_...` keys, and the local sign-in/fallback URLs. Configure Clerk's production application/domain for the deployed frontend; keep all `NEXT_PUBLIC_*` values consistent between your build and runtime environments.
+3. On the API side (`DoctorTracker-Backend`): `CLERK_JWT_KEY` set, and `CORS_ORIGIN` includes the deployed frontend URL, matching scheme/host/port exactly with no trailing slash.
+4. **Timeouts.** The API timeout is 60 s; configure this app's server-render/action function duration above it (e.g. 70 s where the account/runtime supports it) so the client does not abandon requests the API can still complete. If a shorter duration is used instead, disclose cold-start read retries. Writes are never retried automatically after a timeout.
+5. Then run the production smoke passes: signed-out redirect and nested sign-in; admin dashboard/CRUD; denied non-admin and direct mutation rejection; doctor/patient date filters; stale/last-page deletion; safe API failures; responsive navigation; sign-out.
 
-The complete feature walkthrough, technical-decision deep dives, deployment details, and desktop/mobile screenshots are delivered in F8.
+**Cold starts:** free-tier API instances sleep when idle, so the first page load after a pause can take **30+ seconds**. That is the backend provider's cold start, not a client defect — a subsequent request is fast.
+
+---
+
+## Visual Evidence
+
+Desktop and mobile screenshots are captured from the deployed application and placed in `docs/screenshots/` (referenced in this section once committed):
+
+| # | Shot | Route | Viewport |
+|---|---|---|---|
+| 1 | Dashboard — KPI cards, patients-per-doctor ranking, 30-day timeline | `/dashboard` | Desktop 1280 px |
+| 2 | Doctors directory with an active filter + New Doctor modal | `/doctors` | Desktop 1280 px |
+| 3 | Doctor detail with assigned patients and Add Patient modal | `/doctors/<id>` | Desktop 1280 px |
+| 4 | Patients directory with doctor-chip filter + edit modal | `/patients` | Desktop 1280 px |
+| 5 | Patients directory (or dashboard) | same route | Mobile 390×844 |
+| 6 | Dark-mode workspace (theme persisted) | `/patients` | Desktop 1280 px |
+| 7 | Clerk sign-in (light or dark) | `/sign-in` | Desktop 1280 px |
+
+Capture with browser devtools device mode at 100% zoom after seeding representative data, PNG format, and save as `docs/screenshots/NN-short-name.png` matching the table above.
+
+---
+
+## Verification
+
+Each phase's smoke list ran in development and production (`npm run build` + `npm start`) on Node 26.x, alongside clean lint, typecheck and build gates and the full Vitest suite (125 unit/contract tests). Highlights of what each phase verified against a live backend:
+
+### F1+F2 — Shell, theme, Clerk
+
+1. Signed-out visits to `/`, `/dashboard`, `/doctors`, `/patients`, and `/forbidden` reach local `/sign-in` without showing protected content.
+2. `/doctors?search=card` then sign-in restores the deep link; all three sidebar destinations and the account menu work.
+3. Light/dark switching survives reload and syncs across tabs; verified at desktop and 320/390 px widths including Clerk forms.
+4. Mobile Burger opens/closes, route navigation and Escape close it, focus returns; reloading with the menu open starts closed; tabs have independent navigation state.
+5. Sign-out returns to `/sign-in`; a non-admin account reaches `/forbidden` with no workspace data and can sign out; the theme preference survives sign-out while menu state does not.
+6. Keyboard skip link reaches main content on the admin shell; no hydration errors or horizontal overflow.
+
+### F3 — Client foundation (covered by F4+ lists/actions)
+
+API client layer landed with mocked-transport tests; its behaviors are exercised live by every later phase's list pages below: URL normalization, `ActionResult` mutation mapping, and safe expected-error handling.
+
+### F4 — Dashboard
+
+1. KPI counts, top-ten patients-per-doctor ranking, and the 30-day activity chart render live from `GET /api/health`-verified backend.
+2. Range control affects only the chart; 7/30/90 selection round-trips the URL; junk/repeated values canonicalize.
+3. Tooltips show full names; empty rankings and all-zero timelines show explanatory empty states.
+4. Stopping the API yields safe panel feedback; **Retry** recovers after restart; rate limits disable retry until deadline; sessions rejected while active offer retry/sign-out.
+
+### F5 — Doctors directory
+
+1. Full directory renders names, specializations, hospitals, phones, emails, joined dates.
+2. Debounced search, specialization/hospital/date filters, sort (newest/oldest/name asc/name desc), and pagination all reset the page to 1 on filter change.
+3. Create/edit validate inline (duplicate email); submitting an unchanged edit is disabled; delete confirms, and a doctor with patients surfaces the API 409 conflict and stays open — deletable doctors refresh the directory.
+
+### F6 — Doctor detail, patient assignment
+
+1. Doctor card and assigned-patients table; patient search + exact condition filters round-trip the URL with page resets; last-page deletion recovers.
+2. Add Patient (integer age 0–130, optional clearable gender) lands in the table, dashboard and `/patients`; Remove Patient confirms the double-deletion wording.
+3. Malformed/unknown ids render the shared not-found page; the API-down case shows the retry callout; non-admins see no data.
+
+### F7 — Patients directory
+
+1. Every patient with a nullable Doctor column ("Unassigned"); **no Add-patient button** anywhere — creation happens from a doctor's detail page only.
+2. Debounced search, exact condition, created-date range, sort, pagination — reset-to-page-1 on change, back/forward fidelity, junk-param normalization, chip-based `doctorId` deep link with its own clear control.
+3. Edit modal resets per record, disabled until changed, PATCHes only changed fields, and never offers clearing gender; delete discloses doctor-link deletion; stale deletes show the safe message and refresh; last-row deletion recovers to a valid page.
+
+### Regression guard
+
+`tests/use-server-exports.test.ts` pins the Next.js invariant that `"use server"` files export only async functions (write-input Zod contracts live in `src/lib/validation/`), so the module-evaluation failure class is caught in CI before it can reach the browser.
