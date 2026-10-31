@@ -29,6 +29,8 @@ import {
   deleteDoctor,
   createDoctorPatient,
   deleteDoctorPatient,
+  updatePatient,
+  deletePatient,
 } from "@/lib/api/client";
 
 const apiDoctorBody = {
@@ -488,5 +490,104 @@ describe("doctor patient writes", () => {
     expect(url.toString()).toBe(
       "http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1/patients/68f0d2ef23b79906d61c9ab2",
     );
+  });
+});
+
+describe("patient directory writes", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({
+      isAuthenticated: true,
+      getToken: () => "session-token-1",
+    });
+  });
+
+  // PATCH /patients/:id responds like GET /patients/:id: the patient keeps
+  // its nullable `doctor` embed (backend patientWithDoctorSelect).
+  const storedPatientBody = {
+    id: "68f0d2ef23b79906d61c9ab2",
+    name: "Ashley Stone",
+    age: 45,
+    gender: null,
+    phone: "+1 555 210 4587",
+    condition: "Hypertension",
+    createdAt: "2026-10-30T12:00:00.000Z",
+    updatedAt: "2026-10-30T12:00:00.000Z",
+    doctor: null,
+  };
+
+  it("updatePatient patches patients/:id with the changed subset and validates the full DTO", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({
+          data: { ...storedPatientBody, age: 46 },
+        }),
+      }),
+    );
+
+    const result = await updatePatient(
+      "68f0d2ef23b79906d61c9ab2",
+      {
+        age: 46,
+        gender: "other",
+      },
+    );
+
+    expect(result.data.age).toBe(46);
+    expect(result.data.doctor).toBeNull();
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("PATCH");
+    expect(init.headers).toHaveProperty("Content-Type", "application/json");
+    expect(init.body).toBe(
+      JSON.stringify({
+        age: 46,
+        gender: "other",
+      }),
+    );
+    expect(url.toString()).toBe(
+      "http://api.test/api/patients/68f0d2ef23b79906d61c9ab2",
+    );
+  });
+
+  it("updatePatient validates the required nullable doctor embed in the response", async () => {
+    // `doctor` is a required key (nullable, not omittable): a PATCH response
+    // without it violates patientWithDoctorSelect and must be rejected at
+    // runtime rather than trusted.
+    const withoutDoctor: Record<string, unknown> = { ...storedPatientBody };
+    delete withoutDoctor.doctor;
+    fetchMock.mockResolvedValue(
+      httpResponse({ body: JSON.stringify({ data: withoutDoctor }) }),
+    );
+
+    await expect(
+      updatePatient("68f0d2ef23b79906d61c9ab2", { age: 46 }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("deletePatient deletes from patients/:id endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({ data: { id: "68f0d2ef23b79906d61c9ab2" } }),
+      }),
+    );
+
+    const result = await deletePatient("68f0d2ef23b79906d61c9ab2");
+
+    expect(result.data.id).toBe("68f0d2ef23b79906d61c9ab2");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("DELETE");
+    expect(init.body).toBeUndefined();
+    expect(url.toString()).toBe(
+      "http://api.test/api/patients/68f0d2ef23b79906d61c9ab2",
+    );
+  });
+
+  it("deletePatient rejects a DTO violating delete envelope", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({ body: JSON.stringify({ data: { id: 42 } }) }),
+    );
+
+    await expect(
+      deletePatient("68f0d2ef23b79906d61c9ab2"),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
 });

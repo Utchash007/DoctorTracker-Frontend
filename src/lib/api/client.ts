@@ -418,6 +418,32 @@ export function getPatient(id: string): Promise<ApiResourceResponse<ApiPatient>>
   return apiResource(`patients/${encodeId(id)}`, apiPatientSchema);
 }
 
+// PATCH /patients/:id responds like GET /patients/:id: the patient keeps its
+// nullable `doctor` embed (the backend `patientWithDoctorSelect`).
+export function updatePatient(
+  id: string,
+  body: Partial<{
+    name: string;
+    age: number;
+    gender: "male" | "female" | "other";
+    phone: string;
+    condition: string;
+  }>,
+): Promise<ApiResourceResponse<ApiPatient>> {
+  return apiSend("PATCH", `patients/${encodeId(id)}`, body, apiPatientSchema);
+}
+
+export function deletePatient(
+  id: string,
+): Promise<ApiResourceResponse<{ id: string }>> {
+  return apiSend(
+    "DELETE",
+    `patients/${encodeId(id)}`,
+    undefined,
+    apiDeletedResponseSchema,
+  );
+}
+
 export function getDashboardSummary(): Promise<
   ApiResourceResponse<ApiDashboardSummary>
 > {

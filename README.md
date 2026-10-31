@@ -4,7 +4,7 @@ Doctor Tracker brings doctor profiles, patient records, and care activity into o
 
 ## Current phase
 
-**F6 — Doctor detail and patients under a doctor.** The protected `/doctors/[id]` route streams the doctor's profile and their patient list as independent parallel reads after the admin check. The patient table offers name search, an exact condition filter, and pagination — all committed to URL state — plus modal-based **Add Patient** (uncontrolled Mantine form; unset gender omitted from the create body) and **Remove** (explicitly deletes the patient and the doctor link). Stale ids recover through not-found or safe refresh feedback; writes run through Server Actions with independent role checks and invalidate the detail page, the patients list, and the dashboard. Patient records can still only be created from this detail page. The patients directory page follows in F7, and recovery/deploy polish in F8.
+**F7 — Patients list page with edit and delete.** The protected `/patients` route is a full server-rendered directory: every patient with a nullable doctor name column ("Unassigned" when no link) plus debounced name search, an exact condition filter, a created-date range, sort, and pagination — all state committed to URL search params mapped 1:1 to API queries, with server-side out-of-range and empty-page recovery. `doctorId` deep links remain supported and surface as a chip with its own clear control; the deferred doctor selector is deliberately absent. Edit is a per-record reset Mantine Modal that sends only the changed PATCH fields and keeps gender `clearable={false}` (the API cannot clear a supplied gender — nothing here falsely claims it can); Delete confirms that both the patient and their doctor link are removed. There is **no Add-patient button on this page** — records are created only under a doctor's detail page. Writes run through independently authorized Server Actions with stale-404 refresh handling.
 
 Every API call stays in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs. Mutations return serializable `ActionResult` payloads; validation and duplicate-email errors map directly into Mantine Form fields.
 
@@ -83,6 +83,7 @@ src/
     charts/             # Mantine charts and the URL-driven timeline range control
     doctors/            # Doctors table, filters, pagination and modal CRUD
     doctor-detail/      # Doctor profile card, patients table, add/remove dialogs
+    patients/           # Patients directory table, filters, edit/delete dialogs
   lib/                  # Server-only env, auth/role helpers, and lib/api/ server client
   providers/            # Mantine theme and identity-scoped Zustand providers
   stores/               # Typed vanilla Zustand store factories
@@ -136,5 +137,14 @@ F1 verification passed on Node **26.13.0**: clean install, dependency checks, li
 4. **Remove Patient**: click the trash icon on a patient row, confirm the wording states that both the patient and the link are deleted, then remove it. The table, dashboard, and any other open lists refresh; removing a stale record shows the safe message and refreshes.
 5. Directly open `/doctors/abc123` and any malformed id: both render the shared not-found page. Open a valid id whose doctor was deleted: the loader recovers to not-found. Stop the API and visit a doctor detail page: the panel callout with **Retry** appears; restart the API and retry. Non-admin accounts are denied with no data shown, and sign-in still returns to the deep link.
 6. Check light/dark modes at desktop and 320/390 px mobile widths (table scroll, modal focus, keyboard labels), then run the same checks in production mode with `npm run build` followed by `npm start`.
+
+## F7 patients smoke test
+
+1. Open `/patients`. Confirm the table shows every patient with Patient, Age (null gender renders "Not set"), Phone, Condition, Doctor ("Unassigned" when missing), and Created columns. There is **no Add-patient button** — not in the header, table empty state, or anywhere else.
+2. **Filters and sorting**: type in the name search (debounced ~400 ms URL update), enter an exact condition (full word, e.g. `Hypertension`), pick a created-date range, switch sort options, and change page/limit. Confirm every change resets the page to 1, back/forward reproduces the URL and data, and junk/invalid params normalize silently. **Reset** clears search, condition, dates, sort (and any deep-link filter); the pagination row disappears when 0 results match.
+3. **Deep link**: from a doctor's detail page copy its URL, or open `/patients?doctorId=<24-hex id from the API list>`. Confirm the dashboard narrows to that doctor's patients with the "Filtered to one doctor" chip; click **Clear filter** to drop only the doctor filter, keeping the other filters.
+4. **Edit patient**: click the edit icon. Confirm each opened record starts fresh, unchanged records have the submit disabled, and only changed fields are PATCHed (observe the API logs if handy). Age accepts integers 0–130 only; gender is **not clearable** — a set gender can be replaced but not blanked. Save, and verify `/patients`, the relevant doctor's detail page, and the dashboard reflect the change.
+5. **Delete patient**: click the trash icon; confirm the modal states that both the patient and their doctor link are deleted. Cancel keeps everything; confirm removes the row, and the doctor's detail page loses the patient on its next visit. Delete the only patient on the last page — the app recovers to a valid page. A stale delete (record removed elsewhere) shows the safe message and refreshes the list.
+6. Check light/dark modes at desktop and 320/390 px mobile widths (table scroll, chip wrap, modal focus, keyboard labels), then run the same checks in production mode with `npm run build` followed by `npm start`.
 
 The complete feature walkthrough, technical-decision deep dives, deployment details, and desktop/mobile screenshots are delivered in F8.
