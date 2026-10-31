@@ -27,6 +27,8 @@ import {
   createDoctor,
   updateDoctor,
   deleteDoctor,
+  createDoctorPatient,
+  deleteDoctorPatient,
 } from "@/lib/api/client";
 
 const apiDoctorBody = {
@@ -370,5 +372,121 @@ describe("api client dashboard arrays and writes", () => {
     const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
     expect(init.method).toBe("DELETE");
     expect(url.toString()).toBe("http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1");
+  });
+});
+
+describe("doctor patient writes", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({
+      isAuthenticated: true,
+      getToken: () => "session-token-1",
+    });
+  });
+
+  const createdPatientBody = {
+    id: "68f0d2ef23b79906d61c9ab2",
+    name: "Ashley Stone",
+    age: 45,
+    gender: "female",
+    phone: "+1 555 210 4587",
+    condition: "Hypertension",
+    createdAt: "2026-10-30T12:00:00.000Z",
+    updatedAt: "2026-10-30T12:00:00.000Z",
+  };
+
+  it("createDoctorPatient posts to doctors/:id/patients and validates the plain patient", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        status: 201,
+        body: JSON.stringify({ data: createdPatientBody }),
+      }),
+    );
+
+    const result = await createDoctorPatient("68f0d2ef23b79906d61c9ab1", {
+      name: "Ashley Stone",
+      age: 45,
+      gender: "female",
+      phone: "+1 555 210 4587",
+      condition: "Hypertension",
+    });
+
+    expect(result.data.id).toBe("68f0d2ef23b79906d61c9ab2");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("POST");
+    expect(init.headers).toHaveProperty("Content-Type", "application/json");
+    expect(init.body).toBe(
+      JSON.stringify({
+        name: "Ashley Stone",
+        age: 45,
+        gender: "female",
+        phone: "+1 555 210 4587",
+        condition: "Hypertension",
+      }),
+    );
+    expect(url.toString()).toBe(
+      "http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1/patients",
+    );
+  });
+
+  it("createDoctorPatient accepts an omitted gender like the create-time UI sends", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        status: 201,
+        body: JSON.stringify({ data: { ...createdPatientBody, gender: null } }),
+      }),
+    );
+
+    const result = await createDoctorPatient("68f0d2ef23b79906d61c9ab1", {
+      name: "Ashley Stone",
+      age: 45,
+      phone: "+1 555 210 4587",
+      condition: "Hypertension",
+    });
+
+    expect(result.data.gender).toBeNull();
+    const [, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("gender");
+  });
+
+  it("createDoctorPatient rejects DTO-violating patient fields", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        status: 201,
+        body: JSON.stringify({
+          data: { ...createdPatientBody, age: "forty-five" },
+        }),
+      }),
+    );
+
+    await expect(
+      createDoctorPatient("68f0d2ef23b79906d61c9ab1", {
+        name: "Ashley Stone",
+        age: 45,
+        gender: "female",
+        phone: "+1 555 210 4587",
+        condition: "Hypertension",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("deleteDoctorPatient deletes from the scoped doctors link endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({ data: { id: "68f0d2ef23b79906d61c9ab2" } }),
+      }),
+    );
+
+    const result = await deleteDoctorPatient(
+      "68f0d2ef23b79906d61c9ab1",
+      "68f0d2ef23b79906d61c9ab2",
+    );
+
+    expect(result.data.id).toBe("68f0d2ef23b79906d61c9ab2");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("DELETE");
+    expect(init.body).toBeUndefined();
+    expect(url.toString()).toBe(
+      "http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1/patients/68f0d2ef23b79906d61c9ab2",
+    );
   });
 });

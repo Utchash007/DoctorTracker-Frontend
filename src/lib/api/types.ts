@@ -49,6 +49,12 @@ export type ApiDoctorPatient = {
   assignedAt: string;
 };
 
+/**
+ * POST /doctors/:id/patients response: the freshly created plain patient.
+ * The backend returns it without the `doctor` embed and without `assignedAt`.
+ */
+export type ApiCreatedPatient = Omit<ApiPatient, "doctor">;
+
 /** GET /doctors/filters dropdown options. */
 export type ApiDoctorFilters = {
   specializations: string[];
