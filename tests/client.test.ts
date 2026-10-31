@@ -24,6 +24,9 @@ import {
   getPatientsPerDoctor,
   getTimeline,
   apiSend,
+  createDoctor,
+  updateDoctor,
+  deleteDoctor,
 } from "@/lib/api/client";
 
 const apiDoctorBody = {
@@ -313,5 +316,59 @@ describe("api client dashboard arrays and writes", () => {
     expect(url.toString()).toBe(
       "http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1",
     );
+  });
+
+  it("createDoctor posts to doctors endpoint and validates response", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({ data: apiDoctorBody }),
+      }),
+    );
+
+    const result = await createDoctor({
+      name: "Dr. Ada Quin",
+      specialization: "Cardiology",
+      hospital: "City General",
+      phone: "+44 20 7946 001",
+      email: "ada@citygeneral.test",
+    });
+
+    expect(result.data.name).toBe("Dr. Ada Quin");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("POST");
+    expect(init.headers).toHaveProperty("Content-Type", "application/json");
+    expect(url.toString()).toBe("http://api.test/api/doctors");
+  });
+
+  it("updateDoctor patches to doctors/:id endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({ data: apiDoctorBody }),
+      }),
+    );
+
+    const result = await updateDoctor("68f0d2ef23b79906d61c9ab1", {
+      name: "Dr. Ada Updated",
+    });
+
+    expect(result.data.name).toBe("Dr. Ada Quin");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("PATCH");
+    expect(url.toString()).toBe("http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1");
+  });
+
+  it("deleteDoctor deletes from doctors/:id endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      httpResponse({
+        body: JSON.stringify({ data: { id: "68f0d2ef23b79906d61c9ab1" } }),
+      }),
+    );
+
+    const result = await deleteDoctor("68f0d2ef23b79906d61c9ab1");
+
+    expect(result.data.id).toBe("68f0d2ef23b79906d61c9ab1");
+    const [url, init] = fetchMock.mock.calls[0] as [URL, NextFetchInit];
+    expect(init.method).toBe("DELETE");
+    expect(url.toString()).toBe("http://api.test/api/doctors/68f0d2ef23b79906d61c9ab1");
   });
 });

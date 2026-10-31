@@ -326,6 +326,42 @@ export function getDoctor(id: string): Promise<ApiResourceResponse<ApiDoctor>> {
   return apiResource(`doctors/${encodeId(id)}`, apiDoctorSchema);
 }
 
+export function createDoctor(
+  body: {
+    name: string;
+    specialization: string;
+    hospital: string;
+    phone: string;
+    email: string;
+  },
+): Promise<ApiResourceResponse<ApiDoctor>> {
+  return apiSend("POST", "doctors", body, apiDoctorSchema);
+}
+
+export function updateDoctor(
+  id: string,
+  body: Partial<{
+    name: string;
+    specialization: string;
+    hospital: string;
+    phone: string;
+    email: string;
+  }>,
+): Promise<ApiResourceResponse<ApiDoctor>> {
+  return apiSend("PATCH", `doctors/${encodeId(id)}`, body, apiDoctorSchema);
+}
+
+export function deleteDoctor(
+  id: string,
+): Promise<ApiResourceResponse<{ id: string }>> {
+  return apiSend(
+    "DELETE",
+    `doctors/${encodeId(id)}`,
+    undefined,
+    apiDeletedResponseSchema,
+  );
+}
+
 export function listDoctorPatients(
   doctorId: string,
   query: Record<string, string> = {},

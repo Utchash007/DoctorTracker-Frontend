@@ -4,9 +4,9 @@ Doctor Tracker brings doctor profiles, patient records, and care activity into o
 
 ## Current phase
 
-**F4 — Dashboard.** The protected dashboard streams four workspace totals, a top-ten patients-per-doctor bar chart, and a daily doctor/patient registration area chart. Its 7/30/90-day control changes the timeline through shareable URL state; totals and rankings retain their all-time/current-week meanings. Panels have independent skeletons, empty states and safe API-failure feedback, including session recovery and rate-limit-aware manual retry. Doctor and patient management follow in F5–F7.
+**F5 — Doctors directory and CRUD.** The protected `/doctors` route provides complete doctor management: server-side search with debounce, specialization and hospital dropdown filters, date-range filtering, sorting, and pagination. Modal-based Create, Edit, and Delete workflows are powered by uncontrolled Mantine forms, Server Actions with independent role checks, and a feature-scoped Zustand store for dialog management. Conflict protection blocks deletion of doctors with assigned patients (409). Doctor detail and patient management follow in F6–F7.
 
-Every API call stays in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs. `src/lib/api/dashboard.ts` handles panel read failures without swallowing framework redirects or unexpected bugs. Charts receive only the fields they render.
+Every API call stays in server runtime through `src/lib/api/client.ts`: a fresh Clerk Bearer token, no-store caching, a bounded timeout, and runtime validation of response envelopes and DTOs. Mutations return serializable `ActionResult` payloads; validation and duplicate-email errors map directly into Mantine Form fields.
 
 ## Setup
 
@@ -116,5 +116,14 @@ F1 verification passed on Node **26.13.0**: clean install, dependency checks, li
 4. Check light/dark modes at desktop and 320/390 px mobile widths. Verify chart tooltips (full doctor names), keyboard range selection, and mobile navigation. Empty rankings and all-zero timelines should show explanatory library empty states.
 5. For a local read-failure check, stop the local API and change the range. Expect safe panel feedback; restart the API and choose **Retry**. Rate-limited responses disable retry until their deadline. A still-active Clerk session rejected by the API offers retry/sign-out; expired sessions return to sign-in.
 6. Repeat the auth checks above with your admin and non-admin accounts, and run the dashboard smoke in production mode with `npm run build` followed by `npm start`.
+
+## F5 doctors directory smoke test
+
+1. Navigate to `/doctors`. Confirm that the table renders the doctors list with doctor names, specializations, hospitals, phone numbers, emails, and joined dates.
+2. **Search and filtering**: Type in the search box; confirm debounced URL update and filtered results. Filter by specialization, hospital, and date range (`from`/`to`). Confirm that changing filters resets the page to 1.
+3. **Sorting and pagination**: Sort by newest, oldest, name (A–Z), and name (Z–A). Change page limit (10, 20, 50) and navigate between pages.
+4. **Create Doctor**: Click **New Doctor**. Fill in valid details and submit. Confirm that the modal closes, the list updates, and the doctor appears. Test duplicate email validation and verify the inline error feedback.
+5. **Edit Doctor**: Click the Edit icon on a doctor row. Change a field and save. Verify that the updated record renders. Verify that submitting without changes is disabled.
+6. **Delete Doctor**: Click the Delete icon on a doctor. Confirm the modal prompt. Deleting a doctor with patients surfaces the API conflict message (409) and leaves the modal open. Deleting a doctor without patients succeeds and refreshes the directory.
 
 The complete feature walkthrough, technical-decision deep dives, deployment details, and desktop/mobile screenshots are delivered in F8.
