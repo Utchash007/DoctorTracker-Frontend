@@ -1,6 +1,8 @@
 import { createStore } from "zustand/vanilla";
 
-export type PatientsModalKind = "edit" | "delete" | null;
+// "add" opens the directory-level Add Patient modal; it carries no selected
+// record (a create form starts empty every time and resets on close).
+export type PatientsModalKind = "add" | "edit" | "delete" | null;
 
 export interface PatientsUiState {
   activeModal: PatientsModalKind;
@@ -8,6 +10,7 @@ export interface PatientsUiState {
 }
 
 export interface PatientsUiActions {
+  openAddModal: () => void;
   openEditModal: (patientId: string) => void;
   openDeleteModal: (patientId: string) => void;
   closeModal: () => void;
@@ -19,6 +22,8 @@ export function createPatientsUiStore() {
   return createStore<PatientsUiStore>()((set) => ({
     activeModal: null,
     selectedPatientId: null,
+    openAddModal: () =>
+      set({ activeModal: "add", selectedPatientId: null }),
     openEditModal: (patientId: string) =>
       set({ activeModal: "edit", selectedPatientId: patientId }),
     openDeleteModal: (patientId: string) =>
