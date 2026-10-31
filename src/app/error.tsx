@@ -5,22 +5,30 @@ import { IconWifiOff } from "@tabler/icons-react";
 import { useEffect } from "react";
 
 /**
- * Generic fallback for unexpected rendering failures. Next.js sanitizes
- * server error details in production, so this never inspects API status,
- * codes or messages — it shows a safe message and a manual reset. Expected
- * API failures are rendered by server loaders instead (see error-state.tsx).
+ * Generic fallback for unexpected route-segment rendering failures. Next.js
+ * sanitizes server error details in production, so this narrows the `unknown`
+ * error defensively and never inspects API status, codes or messages — it
+ * shows a safe message and a manual retry. `retry()` re-fetches and
+ * re-renders the failed segment's server content (Next 16 stable prop);
+ * expected API failures are rendered by server loaders instead (see
+ * error-state.tsx).
  */
-export default function GlobalRouteError({
+export default function RouteSegmentError({
   error,
-  reset,
+  retry,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: unknown;
+  retry: () => void;
 }) {
   useEffect(() => {
     // Server-side owners log context safely; the browser gets a generic UI.
     console.error(error);
   }, [error]);
+
+  const digest =
+    error instanceof Error && "digest" in error && typeof error.digest === "string"
+      ? error.digest
+      : undefined;
 
   return (
     <Stack mih="60vh" justify="center" align="center" py="xl">
@@ -37,12 +45,12 @@ export default function GlobalRouteError({
             An unexpected error interrupted this page. Try again, and contact
             the workspace administrator if it continues.
           </Text>
-          {error.digest ? (
+          {digest ? (
             <Text size="xs" c="dimmed">
-              Reference: {error.digest}
+              Reference: {digest}
             </Text>
           ) : null}
-          <Button variant="default" size="compact-sm" onClick={reset}>
+          <Button variant="default" size="compact-sm" onClick={retry}>
             Try again
           </Button>
         </Stack>
