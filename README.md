@@ -41,7 +41,7 @@ MongoDB Atlas (replica set)
 | Auth | Clerk (`@clerk/nextjs` 7.9.22, prebuilt `<SignIn/>` / `<UserButton/>`) |
 | Client state | Zustand 5.0.16 (transient UI stores only) |
 | Validation | Zod 4.6.7 (server-side form-input contracts mirroring the API) |
-| Tests | Vitest 5.0.5 (unit/contract suites, 125 tests) |
+| Tests | Vitest 5.0.5 (unit/contract suites, 131 tests) |
 | TypeScript | 5.9.3, strict — 0 `any` policy |
 
 ### Repository layout
@@ -186,7 +186,7 @@ Desktop and mobile screenshots are captured from the deployed application and pl
 | 1 | Dashboard — KPI cards, patients-per-doctor ranking, 30-day timeline | `/dashboard` | Desktop 1280 px |
 | 2 | Doctors directory with an active filter + New Doctor modal | `/doctors` | Desktop 1280 px |
 | 3 | Doctor detail with assigned patients and Add Patient modal | `/doctors/<id>` | Desktop 1280 px |
-| 4 | Patients directory with doctor-chip filter + edit modal | `/patients` | Desktop 1280 px |
+| 4 | Patients directory with the Add Patient modal open (required doctor selector) + an active doctor chip | `/patients` | Desktop 1280 px |
 | 5 | Patients directory (or dashboard) | same route | Mobile 390×844 |
 | 6 | Dark-mode workspace (theme persisted) | `/patients` | Desktop 1280 px |
 | 7 | Clerk sign-in (light or dark) | `/sign-in` | Desktop 1280 px |
@@ -197,7 +197,7 @@ Capture with browser devtools device mode at 100% zoom after seeding representat
 
 ## Verification
 
-Each phase's smoke list ran in development and production (`npm run build` + `npm start`) on Node 26.x, alongside clean lint, typecheck and build gates and the full Vitest suite (125 unit/contract tests). Highlights of what each phase verified against a live backend:
+Each phase's smoke list ran in development and production (`npm run build` + `npm start`) on Node 26.x, alongside clean lint, typecheck and build gates and the full Vitest suite (131 unit/contract tests, including the directory-add contract tests). Highlights of what each phase verified against a live backend:
 
 ### F1+F2 — Shell, theme, Clerk
 
@@ -233,7 +233,7 @@ API client layer landed with mocked-transport tests; its behaviors are exercised
 
 ### F7 — Patients directory
 
-1. Every patient with a nullable Doctor column ("Unassigned"); **no Add-patient button** anywhere — creation happens from a doctor's detail page only.
+1. Every patient with a nullable Doctor column ("Unassigned"). At ship time F7 carried **no Add-patient button** (creation lived on a doctor's detail page only); a user-requested post-F7 addition now also places an **Add Patient** action in the page header with a **mandatory**, searchable doctor select — assignment can never be skipped, and the payload goes through the same server action as the doctor-detail flow.
 2. Debounced search, exact condition, created-date range, sort, pagination — reset-to-page-1 on change, back/forward fidelity, junk-param normalization, chip-based `doctorId` deep link with its own clear control.
 3. Edit modal resets per record, disabled until changed, PATCHes only changed fields, and never offers clearing gender; delete discloses doctor-link deletion; stale deletes show the safe message and refresh; last-row deletion recovers to a valid page.
 
