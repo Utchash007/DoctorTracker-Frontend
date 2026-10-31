@@ -11,6 +11,7 @@ import {
   parseRetryAfterHeader,
 } from "./errors";
 import type {
+  ApiCreatedPatient,
   ApiDashboardSummary,
   ApiDoctor,
   ApiDoctorFilters,
@@ -370,6 +371,40 @@ export function listDoctorPatients(
     `doctors/${encodeId(doctorId)}/patients`,
     query,
     apiDoctorPatientSchema,
+  );
+}
+
+// POST /doctors/:id/patients returns the created plain patient: no `doctor`
+// embed, no `assignedAt` (the backend `patientSelect`, verified in code).
+const apiCreatedPatientSchema = z.object(apiPatientFields);
+
+export function createDoctorPatient(
+  doctorId: string,
+  body: {
+    name: string;
+    age: number;
+    gender?: "male" | "female" | "other";
+    phone: string;
+    condition: string;
+  },
+): Promise<ApiResourceResponse<ApiCreatedPatient>> {
+  return apiSend(
+    "POST",
+    `doctors/${encodeId(doctorId)}/patients`,
+    body,
+    apiCreatedPatientSchema,
+  );
+}
+
+export function deleteDoctorPatient(
+  doctorId: string,
+  patientId: string,
+): Promise<ApiResourceResponse<{ id: string }>> {
+  return apiSend(
+    "DELETE",
+    `doctors/${encodeId(doctorId)}/patients/${encodeId(patientId)}`,
+    undefined,
+    apiDeletedResponseSchema,
   );
 }
 
