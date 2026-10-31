@@ -4,10 +4,11 @@ import { Suspense } from "react";
 import { Stack } from "@mantine/core";
 
 import { PatientsView } from "@/components/patients/patients-view";
+import { toDoctorSelectOptions } from "@/components/patients/doctor-options";
 import { PageHeader } from "@/components/shared/page-header";
 import { PageLoading } from "@/components/shared/page-loading";
 import { ReadFailureCallout } from "@/components/shared/error-state";
-import { listPatients } from "@/lib/api/client";
+import { listDoctors, listPatients } from "@/lib/api/client";
 import {
   PATIENTS_QUERY_SPEC,
   canonicalUrl,
@@ -69,9 +70,28 @@ async function PatientsContent({ searchParams }: PatientsPageProps) {
     redirect(canonicalUrl("/patients", { ...query, page: "1" }));
   }
 
+  // Doctor options for the directory's Add Patient modal (every patient must
+  // be assigned to a doctor). Fetched in the server runtime like every other
+  // read and capped at the API's max page of 50, name-ascending for a stable
+  // select order. Fetched only after patients succeed, so a patients failure
+  // still renders its own callout; a doctors failure just disables the modal.
+  const doctorsResult = await readResource(() =>
+    listDoctors({ limit: "50", sort: "name_asc" }),
+  );
+  const doctorOptions = doctorsResult.ok
+    ? toDoctorSelectOptions(doctorsResult.data.data)
+    : [];
+  const doctorsUnavailable = !doctorsResult.ok;
+
   return (
     <PatientsUiStoreProvider>
-      <PatientsView patients={patients} meta={meta} query={query} />
+      <PatientsView
+        patients={patients}
+        meta={meta}
+        query={query}
+        doctorOptions={doctorOptions}
+        doctorsUnavailable={doctorsUnavailable}
+      />
     </PatientsUiStoreProvider>
   );
 }
