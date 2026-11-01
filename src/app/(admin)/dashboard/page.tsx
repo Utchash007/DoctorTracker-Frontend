@@ -1,23 +1,11 @@
-import { Stack } from "@mantine/core";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { RangeSelect } from "@/components/charts/range-select";
-import {
-  PatientsPerDoctorPanel,
-  PatientsPerDoctorPanelSkeleton,
-} from "@/components/dashboard/patients-per-doctor-panel";
-import {
-  SummaryPanel,
-  SummaryPanelSkeleton,
-} from "@/components/dashboard/summary-panel";
 import {
   TimelinePanel,
   TimelinePanelSkeleton,
 } from "@/components/dashboard/timeline-panel";
-import { PageHeader } from "@/components/shared/page-header";
-import { PageLoading } from "@/components/shared/page-loading";
 import { canonicalUrl, normalizeDashboardRange } from "@/lib/api/params";
 import { requireAdmin } from "@/lib/auth";
 
@@ -32,8 +20,8 @@ function firstSearchValue(
 }
 
 /**
- * Server driver: normalize the committed URL range, authorize, then stream
- * the three independent reads so one failed panel never blocks the others.
+ * Re-authorize each range navigation and fetch only its timeline. Totals
+ * and ranking are independently streamed by the persistent layout.
  */
 async function DashboardContent({
   searchParams,
@@ -52,25 +40,7 @@ async function DashboardContent({
     redirect(canonicalUrl("/dashboard", canonicalRange ? { range } : {}));
   }
 
-  return (
-    <Stack gap="xl">
-      <PageHeader
-        title="Dashboard"
-        description="Workspace totals and daily doctor and patient registrations. The range controls daily activity."
-      >
-        <RangeSelect value={range} />
-      </PageHeader>
-      <Suspense fallback={<SummaryPanelSkeleton />}>
-        <SummaryPanel />
-      </Suspense>
-      <Suspense fallback={<PatientsPerDoctorPanelSkeleton />}>
-        <PatientsPerDoctorPanel />
-      </Suspense>
-      <Suspense key={range} fallback={<TimelinePanelSkeleton />}>
-        <TimelinePanel range={range} />
-      </Suspense>
-    </Stack>
-  );
+  return <TimelinePanel range={range} />;
 }
 
 export default function DashboardPage({
@@ -79,7 +49,8 @@ export default function DashboardPage({
   searchParams: Promise<DashboardSearchParams>;
 }) {
   return (
-    <Suspense fallback={<PageLoading />}>
+    // Keep the resolved chart visible during range transitions.
+    <Suspense fallback={<TimelinePanelSkeleton />}>
       <DashboardContent searchParams={searchParams} />
     </Suspense>
   );

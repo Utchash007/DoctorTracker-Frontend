@@ -14,7 +14,7 @@ type PanelResult<T> =
   | { ok: true; data: T }
   | { ok: false; failure: ReadFailure };
 
-/** Called by independently streamed panels after the page's admin guard. */
+/** Called by streamed panels after their page or layout's admin guard. */
 export async function readDashboardPanel<T>(
   request: () => Promise<{ data: T }>,
 ): Promise<PanelResult<T>> {

@@ -45,7 +45,7 @@ const INVALID_PATIENT_ID: ActionResult = {
 function revalidatePatientPaths(doctorId: string): void {
   revalidatePath(`/doctors/${doctorId}`);
   revalidatePath("/patients");
-  revalidatePath("/dashboard");
+  revalidatePath("/(admin)/dashboard", "layout");
 }
 
 export async function addPatientAction(
@@ -162,7 +162,7 @@ export async function deletePatientAction(id: string): Promise<ActionResult> {
   try {
     await deletePatient(id);
     revalidatePath("/patients");
-    revalidatePath("/dashboard");
+    revalidatePath("/(admin)/dashboard", "layout");
     revalidatePath("/doctors/[id]", "page");
     return { ok: true };
   } catch (error) {

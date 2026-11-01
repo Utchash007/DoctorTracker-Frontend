@@ -136,7 +136,7 @@ describe("addPatientAction", () => {
     });
     expect(revalidatePathMock).toHaveBeenCalledWith(`/doctors/${DOCTOR_ID}`);
     expect(revalidatePathMock).toHaveBeenCalledWith("/patients");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
   });
 
   it("keeps an explicitly chosen gender in the body", async () => {
@@ -228,7 +228,7 @@ describe("removePatientAction", () => {
     );
     expect(revalidatePathMock).toHaveBeenCalledWith(`/doctors/${DOCTOR_ID}`);
     expect(revalidatePathMock).toHaveBeenCalledWith("/patients");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
   });
 
   it("maps the scoped 404 onto a safe stale-refresh failure", async () => {
@@ -464,7 +464,7 @@ describe("deletePatientAction", () => {
     expect(result).toEqual({ ok: true });
     expect(deletePatientMock).toHaveBeenCalledWith(PATIENT_ID);
     expect(revalidatePathMock).toHaveBeenCalledWith("/patients");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
     // The owning doctor is unknowable after deletion: invalidate the whole
     // [id] route pattern so every detail page refetches on its next visit.
     expect(revalidatePathMock).toHaveBeenCalledWith(

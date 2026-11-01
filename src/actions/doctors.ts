@@ -43,7 +43,7 @@ export async function createDoctorAction(
   try {
     await createDoctor(parsed.data);
     revalidatePath("/doctors");
-    revalidatePath("/dashboard");
+    revalidatePath("/(admin)/dashboard", "layout");
     return { ok: true };
   } catch (error) {
     return mapDoctorWriteFailure(error);
@@ -81,7 +81,7 @@ export async function updateDoctorAction(
     await updateDoctor(id, parsed.data);
     revalidatePath("/doctors");
     revalidatePath(`/doctors/${id}`);
-    revalidatePath("/dashboard");
+    revalidatePath("/(admin)/dashboard", "layout");
     return { ok: true };
   } catch (error) {
     return mapDoctorWriteFailure(error);
@@ -104,7 +104,7 @@ export async function deleteDoctorAction(id: string): Promise<ActionResult> {
   try {
     await deleteDoctor(id);
     revalidatePath("/doctors");
-    revalidatePath("/dashboard");
+    revalidatePath("/(admin)/dashboard", "layout");
     return { ok: true };
   } catch (error) {
     return mapApiErrorToAction(error);
