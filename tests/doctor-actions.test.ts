@@ -97,7 +97,7 @@ describe("createDoctorAction", () => {
     expect(result).toEqual({ ok: true });
     expect(createDoctorMock).toHaveBeenCalledWith(validDoctorInput);
     expect(revalidatePathMock).toHaveBeenCalledWith("/doctors");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
   });
 
   it("maps duplicate email conflict to the email field", async () => {
@@ -166,7 +166,7 @@ describe("updateDoctorAction", () => {
     });
     expect(revalidatePathMock).toHaveBeenCalledWith("/doctors");
     expect(revalidatePathMock).toHaveBeenCalledWith("/doctors/doc_1");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
   });
 });
 
@@ -194,7 +194,7 @@ describe("deleteDoctorAction", () => {
     expect(result).toEqual({ ok: true });
     expect(deleteDoctorMock).toHaveBeenCalledWith("doc_1");
     expect(revalidatePathMock).toHaveBeenCalledWith("/doctors");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/(admin)/dashboard", "layout");
   });
 
   it("surfaces 409 conflict when doctor still has patients", async () => {

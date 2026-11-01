@@ -1,10 +1,14 @@
 "use client";
 
-import { SegmentedControl } from "@mantine/core";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { Group, Loader, SegmentedControl, VisuallyHidden } from "@mantine/core";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOptimistic, useTransition } from "react";
 
-import { canonicalUrl, type DashboardRange } from "@/lib/api/params";
+import {
+  canonicalUrl,
+  normalizeDashboardRange,
+  type DashboardRange,
+} from "@/lib/api/params";
 
 const RANGE_OPTIONS: Array<{
   value: DashboardRange;
@@ -16,35 +20,50 @@ const RANGE_OPTIONS: Array<{
 ];
 
 /**
- * Committed range lives only in the URL: selecting an option pushes a
- * canonical `/dashboard` URL (`30d` stays implicit), the RSC driver streams
- * the matching panels, and back/forward restores any committed range.
+ * The layout persists, so read the committed range from the current URL.
+ * Optimistic selection acknowledges the click while the RSC timeline loads;
+ * back/forward and interrupted navigation still follow the URL.
  */
-export function RangeSelect({ value }: { value: DashboardRange }) {
+export function RangeSelect() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const value = normalizeDashboardRange(searchParams.get("range") ?? undefined);
+  const [optimisticRange, setOptimisticRange] = useOptimistic(value);
   const [pending, startTransition] = useTransition();
 
   return (
-    <SegmentedControl<DashboardRange>
-      role="radiogroup"
-      aria-label="Activity date range"
-      aria-busy={pending}
-      aria-disabled={pending}
-      name="dashboard-range"
-      color="teal"
-      autoContrast
-      data={RANGE_OPTIONS}
-      value={value}
-      readOnly={pending}
-      onChange={(next) => {
-        if (pending || next === value) return;
-        startTransition(() => {
-          router.push(
-            canonicalUrl("/dashboard", next === "30d" ? {} : { range: next }),
-            { scroll: false },
-          );
-        });
-      }}
-    />
+    <Group gap="xs" wrap="nowrap">
+      <Loader
+        size="xs"
+        color="teal"
+        aria-hidden="true"
+        style={{ visibility: pending ? "visible" : "hidden" }}
+      />
+      <SegmentedControl<DashboardRange>
+        role="radiogroup"
+        aria-label="Activity date range"
+        aria-busy={pending}
+        aria-disabled={pending}
+        name="dashboard-range"
+        color="teal"
+        autoContrast
+        data={RANGE_OPTIONS}
+        value={optimisticRange}
+        readOnly={pending}
+        onChange={(next) => {
+          if (pending || next === value) return;
+          startTransition(() => {
+            setOptimisticRange(next);
+            router.push(
+              canonicalUrl("/dashboard", next === "30d" ? {} : { range: next }),
+              { scroll: false },
+            );
+          });
+        }}
+      />
+      <VisuallyHidden role="status">
+        {pending ? "Updating daily activity..." : ""}
+      </VisuallyHidden>
+    </Group>
   );
 }

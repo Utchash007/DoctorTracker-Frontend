@@ -1,1 +1,1 @@
-export { PageLoading as default } from "@/components/shared/page-loading";
+export { TimelinePanelSkeleton as default } from "@/components/dashboard/timeline-panel";

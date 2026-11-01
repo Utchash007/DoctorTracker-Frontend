@@ -29,6 +29,7 @@ MongoDB Atlas (replica set)
 - **Server-first data access.** Pages are React Server Components by default; every list query, mutation and token read happens in the server runtime (`src/lib/api/client.ts` transparently attaches the Bearer token from `auth().getToken()`). The browser never calls the Express API directly: there are no browser-side fetch effects and no API URLs in client bundles. Mutations are Server Actions that return a typed `ActionResult` to forms and call `router.refresh()` on success.
 - **Clerk owns identity.** Sign-in uses the prebuilt `<SignIn/>` component with nested verification; the admin role arrives as `publicMetadata.role = "admin"` in the session token. Bare `clerkMiddleware()` (`src/proxy.ts`) protects route matching, while each page and action independently re-checks the session and role in the server runtime. `/forbidden` checks authentication only, so a signed-in non-admin can sign out instead of looping; tokens never cross the RSC boundary to client components.
 - **State composition.** Committed list state (search, filters, sort, pagination, date ranges) lives in the URL search params and maps 1:1 to API query strings, with server-side normalization of junk/out-of-range pages. Transient UI (mobile navbar, dialog visibility) lives in small feature-scoped Zustand stores that start closed on server and client and reset per identity. Mantine Form owns form values; Mantine owns the saved color-scheme preference.
+- **Dashboard range updates.** Totals and doctor ranking live in the persistent dashboard layout; switching 7/30/90 days requests only the timeline. The URL-backed control highlights the selection immediately and announces loading while the current chart stays visible. Mutations invalidate the dashboard layout, including its totals and ranking.
 - **Recovery layers.** Expected API failures (403, 404, 401, rate limits, network) render as safe in-page callouts from server loaders, never as generic error screens. Unexpected segment failures fall to `error.tsx`, root-layout failures to `global-error.tsx` (self-contained HTML, Clerk-independent), unmatched/malformed ids to the shared not-found page, and denials to `/forbidden`.
 
 ### Tech stack
@@ -134,6 +135,8 @@ The font is self-hosted by `next/font`; the initial development compilation and 
 | `npm run typecheck` | Generate Next route types and run strict TypeScript checks |
 | `npm run test:unit` | Vitest unit/contract tests with mocked Clerk auth and API transport |
 | `npm run build` | Production build |
+
+Dashboard smoke check: switch 30 → 7 → 90 days, then use Back/Forward. The selected range should respond immediately, the previous chart should remain visible while loading, and each range navigation should produce only a timeline read in the API logs. Create a doctor or add/remove a patient, then return to the dashboard and verify the totals and ranking refresh.
 
 All direct dependencies are exact versions; `package-lock.json` makes installs reproducible. Core versions: Next.js **16.4.3**, React/React DOM **19.2.9**, Mantine (including charts) **9.7.4**, Recharts **3.10.1**, Clerk Next.js **7.9.22**, Zustand **5.0.16**, Zod **4.6.7**, Vitest **5.0.5**, and TypeScript **5.9.3**.
 
